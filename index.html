@@ -161,7 +161,7 @@ function render(){
     lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico,
     animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual,
     finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
-    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
+    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, opagri:telaOpAgri, chuvas:telaChuvas, safras:()=>telaCadastro('safras'), dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -211,6 +211,12 @@ async function telaInicio(){
       ${q('estinsumos','🧪','Estoque atual','Saldo por produto e local')}
       ${q('estmov','🔁','Movimentações','Compras, consumo, transferências')}
       ${q('locais','🏚️','Locais de armazenamento','Depósitos, tanques, fábrica')}
+    </div>
+    <div class="secao">Agrícola</div>
+    <div class="grade">
+      ${q('opagri','🚜','Operações agrícolas','Plantio, adubação, colheita...')}
+      ${q('chuvas','🌧️','Chuvas','Pluviometria por mês')}
+      ${q('safras','🌽','Safras','Culturas e períodos')}
     </div>
     <div class="secao">Cadastros</div>
     <div class="grade">
@@ -299,6 +305,9 @@ const CAD = {
   fazendas: {tabela:'fazendas', titulo:'Fazendas', ordem:'nome', porFazenda:false,
     colunas:[['nome','Nome'],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']],
     campos:[['nome','Nome',{obr:1}],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']], busca:['nome','municipio']},
+  safras: {tabela:'safras', titulo:'Safras', ordem:'nome', porFazenda:true,
+    colunas:[['nome','Safra'],['cultura','Cultura'],['inicio','Início','d'],['fim','Fim','d'],['ativo','Situação','b']],
+    campos:[['nome','Nome (ex.: Milho silagem 2026/27)',{obr:1}],['cultura','Cultura'],['inicio','Início',{tipo:'date'}],['fim','Fim',{tipo:'date'}],['ativo','Ativa',{tipo:'bool'}]], busca:['nome','cultura']},
   locais: {tabela:'locais_estoque', titulo:'Locais de armazenamento', ordem:'nome', porFazenda:true,
     colunas:[['nome','Nome'],['ativo','Situação','b']], campos:[['nome','Nome',{obr:1}],['ativo','Ativo',{tipo:'bool'}]], busca:['nome']},
   fincontas: {tabela:'contas_bancarias', titulo:'Contas bancárias e caixas', ordem:'nome', porFazenda:true, fin:true,
@@ -1796,6 +1805,199 @@ async function fichaNota(id){
     const obs = itens.slice(0,3).map(i => i.descricao).filter(Boolean).join(', ');
     formLancFin({tipo:'Pagar', operacao: 'Compra de produtos', pessoa:n.emitente_nome, documento:n.numero, tipo_documento:'Nota fiscal', data_emissao:String(n.data_emissao||'').slice(0,10), vencimento:venc,
       valor: parc.length > 1 ? Number(parc[0].valor) : Number(n.valor_total), socio:n.destinatario_nome, observacao:obs, _nota:n.id, _parcelas: parc.length});
+  };
+}
+
+// ---------- Agrícola ----------
+const TIPOS_AGRI = ['Preparo do solo','Calagem / gessagem','Plantio','Adubação','Adubação de cobertura','Pulverização','Roçada','Irrigação','Colheita','Ensilagem','Fenação','Outros'];
+async function carregarAgri(){
+  const fid = E.fazenda.id;
+  const [ops, safras, areas, produtos, locais] = await Promise.all([
+    todas(() => sb.from('operacoes_agricolas').select('*').eq('fazenda_id', fid).order('data', {ascending:false}).order('criado_em', {ascending:false})),
+    todas(() => sb.from('safras').select('*').eq('fazenda_id', fid).order('inicio', {ascending:false})),
+    todas(() => sb.from('areas').select('id,codigo,hectares,cultura').eq('fazenda_id', fid).order('codigo')),
+    todas(() => sb.from('produtos').select('id,nome,unidade,ativo').eq('fazenda_id', fid).order('nome')),
+    todas(() => sb.from('locais_estoque').select('id,nome,ativo').eq('fazenda_id', fid).order('nome'))]);
+  return {ops, safras, areas, produtos, locais, aP:Object.fromEntries(areas.map(a => [a.id,a])), pP:Object.fromEntries(produtos.map(p => [p.id,p])), sP:Object.fromEntries(safras.map(s => [s.id,s]))};
+}
+
+async function telaOpAgri(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const A = await carregarAgri();
+  const ini = new Date(Date.now() - 365*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Operações agrícolas – ${esc(E.fazenda.nome)}</h2>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Operação</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="ade" type="date" value="${ini}"><input id="aate" type="date" value="${hojeISO()}">
+      <select id="asaf"><option value="">Safra: todas</option>${A.safras.map(s => `<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select>
+      <select id="atipo"><option value="">Operação: todas</option>${TIPOS_AGRI.map(t => `<option>${t}</option>`).join('')}</select>
+      <select id="aarea"><option value="">Área: todas</option>${A.areas.map(a => `<option value="${a.id}">${esc(a.codigo)}</option>`).join('')}</select></div>
+    <div class="grade" id="atot" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:10px"></div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Área</th><th>Operação</th><th class="num">Área (ha)</th><th>Produto</th><th class="num">Qtd</th><th class="num">Dose/ha</th><th class="num">Colhido</th><th>Máquina</th><th>Operador</th><th>Safra</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formOpAgri(A, {});
+  let ls = [];
+  const desenhar = () => {
+    const de = $('#ade').value || '0000', ate = $('#aate').value || '9999', sf = $('#asaf').value, tp = $('#atipo').value, ar = $('#aarea').value;
+    ls = A.ops.filter(o => o.data >= de && o.data <= ate && (!sf || o.safra_id === sf) && (!tp || o.tipo === tp) && (!ar || o.area_id === ar));
+    const ha = ls.reduce((s,o) => s + Number(o.area_ha||0), 0), custo = ls.reduce((s,o) => s + Number(o.custo||0), 0), col = ls.filter(o => o.tipo === 'Colheita');
+    const card = (t, v) => `<div class="quad" style="min-height:64px;padding:8px;cursor:default"><span>${t}</span><b>${v}</b></div>`;
+    $('#atot').innerHTML = card('Operações', fmtNum(ls.length,0)) + card('Área trabalhada', fmtNum(ha)+' ha') + card('Custo lançado', moeda(custo)) + card('Colheitas', fmtNum(col.length,0));
+    $('#tb').innerHTML = ls.map((o,i) => { const p = A.pP[o.produto_id];
+      return `<tr class="clic" data-i="${i}"><td>${fD(o.data)}</td><td><b>${esc(A.aP[o.area_id]?.codigo||'')}</b></td><td>${esc(o.tipo)}</td><td class="num">${fmtNum(o.area_ha)}</td><td>${esc(p?.nome||'')}</td>
+        <td class="num">${o.quantidade!=null?fQ(o.quantidade)+' '+esc(p?.unidade||''):''}</td><td class="num">${o.quantidade!=null&&o.area_ha>0?fmtNum(o.quantidade/o.area_ha,2):''}</td>
+        <td class="num">${o.colhido!=null?fQ(o.colhido)+' '+esc(o.unidade_colheita||''):''}</td><td>${esc(o.maquina)}</td><td>${esc(o.operador)}</td><td>${esc(A.sP[o.safra_id]?.nome||'')}</td></tr>`; }).join('')
+      || '<tr><td colspan="11" class="vazio">Nenhuma operação no período</td></tr>';
+    $('#rod').textContent = `${ls.length} operações`;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formOpAgri(A, ls[+tr.dataset.i]));
+  };
+  ['ade','aate','asaf','atipo','aarea'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Operações agrícolas', ['Data','Área','Operação','Área (ha)','Produto','Quantidade','Unidade','Dose/ha','Colhido','Unidade colheita','Máquina','Operador','Custo','Safra','Observação'],
+    ls.map(o => { const p = A.pP[o.produto_id]; return [fD(o.data), A.aP[o.area_id]?.codigo, o.tipo, fmtNum(o.area_ha), p?.nome, o.quantidade!=null?fQ(o.quantidade):'', p?.unidade, o.quantidade!=null&&o.area_ha>0?fmtNum(o.quantidade/o.area_ha,2):'', o.colhido!=null?fQ(o.colhido):'', o.unidade_colheita, o.maquina, o.operador, o.custo!=null?fmtNum(o.custo):'', A.sP[o.safra_id]?.nome, o.observacao]; }));
+  desenhar();
+}
+
+function formOpAgri(A, reg){
+  const novo = !reg.id, pode = podeEditar();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${novo ? 'Nova operação agrícola' : 'Operação agrícola'}</h3>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Data *</label><input id="g_data" type="date" value="${reg.data || hojeISO()}" max="${hojeISO()}"></div>
+      <div style="flex:1"><label>Operação *</label><select id="g_tipo">${TIPOS_AGRI.map(t => `<option ${t===reg.tipo?'selected':''}>${t}</option>`).join('')}</select></div></div>
+    <label>Área(s) *</label>${novo ? `<input id="g_abus" placeholder="Filtrar áreas" style="margin-bottom:6px"><div class="lista-areas" id="g_areas">${A.areas.map(a => `<label class="chk" data-c="${esc(a.codigo.toLowerCase())}"><input type="checkbox" value="${a.id}" data-ha="${a.hectares||0}"> ${esc(a.codigo)} <span class="pill">${fmtNum(a.hectares)} ha</span></label>`).join('')}</div>`
+      : `<select id="g_area">${opcoes(A.areas, reg.area_id, 'codigo')}</select>`}
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Área trabalhada (ha)</label><input id="g_ha" inputmode="decimal" value="${reg.area_ha!=null?String(reg.area_ha).replace('.',','):''}" placeholder="soma das áreas"></div>
+      <div style="flex:1"><label>Safra</label><select id="g_safra"><option value="">—</option>${A.safras.filter(s => s.ativo || s.id === reg.safra_id).map(s => `<option value="${s.id}" ${s.id===reg.safra_id?'selected':''}>${esc(s.nome)}</option>`).join('')}</select></div></div>
+    <div id="b_prod"><label>Produto aplicado</label><select id="g_prod">${opcoes(A.produtos.filter(p => p.ativo !== false || p.id === reg.produto_id), reg.produto_id)}</select>
+      <div style="display:flex;gap:8px"><div style="flex:1"><label id="l_gq">Quantidade total</label><input id="g_q" inputmode="decimal" value="${reg.quantidade!=null?String(reg.quantidade).replace('.',','):''}"></div>
+        <div style="flex:1"><label>Dose por ha</label><input id="g_dose" inputmode="decimal" placeholder="ou informe a dose"></div></div>
+      ${novo ? `<label class="chk"><input type="checkbox" id="g_baixa" ${A.locais.length?'checked':''} ${A.locais.length?'':'disabled'}> Dar baixa no estoque de insumos</label>
+        <select id="g_local">${opcoes(A.locais.filter(l => l.ativo !== false), A.locais.length === 1 ? A.locais[0].id : '')}</select>` : (reg.movimento_id ? '<div class="rodape">Baixa no estoque já feita.</div>' : '')}</div>
+    <div id="b_col"><div style="display:flex;gap:8px"><div style="flex:2"><label>Quantidade colhida</label><input id="g_col" inputmode="decimal" value="${reg.colhido!=null?String(reg.colhido).replace('.',','):''}"></div>
+      <div style="flex:1"><label>Unidade</label><select id="g_ucol">${['t','kg','sc','fardos','m³'].map(u => `<option ${u===reg.unidade_colheita?'selected':''}>${u}</option>`).join('')}</select></div></div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Máquina / implemento</label><input id="g_maq" value="${esc(reg.maquina)}"></div><div style="flex:1"><label>Operador</label><input id="g_op" value="${esc(reg.operador)}"></div></div>
+    <label>Custo do serviço (R$)</label><input id="g_custo" inputmode="decimal" value="${reg.custo!=null?String(reg.custo).replace('.',','):''}">
+    <label>Observação</label><input id="g_obs" value="${esc(reg.observacao)}">
+    <div class="msg erro" id="g_erro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="g_can">Cancelar</button>${pode ? '<button class="btn" id="g_sal">Salvar</button>' : ''}</div>
+    ${!novo && ehAdmin() ? '<div class="acoes"><button class="btn perigo" id="g_exc">Excluir</button></div>' : ''}</div>`;
+  document.body.appendChild(m);
+  const g = id => m.querySelector('#'+id);
+  const num = v => { v = String(v||'').trim().replace(/\./g,'').replace(',', '.'); return v === '' ? null : Number(v); };
+  const marcadas = () => novo ? [...m.querySelectorAll('#g_areas input:checked')] : [];
+  const atualizar = () => {
+    const t = g('g_tipo').value;
+    g('b_col').style.display = ['Colheita','Ensilagem','Fenação'].includes(t) ? '' : 'none';
+    g('b_prod').style.display = ['Roçada','Colheita','Ensilagem','Fenação'].includes(t) ? 'none' : '';
+    const p = A.pP[g('g_prod').value]; g('l_gq').textContent = `Quantidade total${p?.unidade ? ' ('+p.unidade+')' : ''}`;
+    if (novo) { const ha = marcadas().reduce((s,i) => s + Number(i.dataset.ha||0), 0); g('g_ha').placeholder = ha ? fmtNum(ha)+' (soma)' : 'soma das áreas'; }
+    if (g('g_local')) g('g_local').style.display = g('g_baixa').checked ? '' : 'none';
+  };
+  if (novo) { g('g_abus').oninput = e => m.querySelectorAll('#g_areas .chk').forEach(l => l.style.display = l.dataset.c.includes(e.target.value.toLowerCase()) ? '' : 'none');
+    m.querySelectorAll('#g_areas input').forEach(i => i.onchange = atualizar); g('g_baixa').onchange = atualizar; }
+  g('g_tipo').onchange = atualizar; g('g_prod').onchange = atualizar; atualizar();
+  g('g_dose').oninput = () => { const ha = num(g('g_ha').value) ?? marcadas().reduce((s,i) => s + Number(i.dataset.ha||0), 0); const d = num(g('g_dose').value); if (d != null && ha) g('g_q').value = String(Math.round(d*ha*1000)/1000).replace('.',','); };
+  g('g_can').onclick = () => m.remove();
+  const erro = t => { g('g_erro').textContent = t; g('g_erro').style.display = 'block'; };
+  if (pode) g('g_sal').onclick = async () => {
+    const t = g('g_tipo').value, d = g('g_data').value, temProd = g('b_prod').style.display !== 'none', temCol = g('b_col').style.display !== 'none';
+    const prod = temProd ? g('g_prod').value || null : null, qtd = temProd ? num(g('g_q').value) : null;
+    const base = {fazenda_id:E.fazenda.id, data:d, tipo:t, safra_id:g('g_safra').value||null, produto_id:prod, maquina:g('g_maq').value.trim()||null, operador:g('g_op').value.trim()||null,
+      colhido: temCol ? num(g('g_col').value) : null, unidade_colheita: temCol ? g('g_ucol').value : null, custo:num(g('g_custo').value), observacao:g('g_obs').value.trim()||null};
+    if (!d) return erro('Informe a data');
+    if (prod && !(qtd > 0)) return erro('Informe a quantidade do produto');
+    g('g_sal').disabled = true;
+    if (!novo) {
+      const r = await sb.from('operacoes_agricolas').update({...base, area_id:g('g_area').value, area_ha:num(g('g_ha').value), quantidade:qtd}).eq('id', reg.id);
+      g('g_sal').disabled = false; if (r.error) return erro(r.error.message); m.remove(); aviso('Salvo'); return render();
+    }
+    const sel = marcadas(); if (!sel.length) { g('g_sal').disabled = false; return erro('Marque pelo menos uma área'); }
+    const haTot = num(g('g_ha').value) ?? sel.reduce((s,i) => s + Number(i.dataset.ha||0), 0);
+    const baixa = prod && qtd > 0 && g('g_baixa').checked;
+    if (baixa && !g('g_local').value) { g('g_sal').disabled = false; return erro('Escolha o local de onde sai o produto'); }
+    let movId = null;
+    if (baixa) {
+      const {data:movs} = await sb.from('movimentos_estoque').select('quantidade').eq('fazenda_id', E.fazenda.id).eq('produto_id', prod).eq('local_id', g('g_local').value);
+      const saldo = (movs||[]).reduce((s,x) => s + Number(x.quantidade), 0);
+      if (qtd > saldo + 1e-9) { g('g_sal').disabled = false; return erro(`Saldo insuficiente no estoque (${fQ(saldo)}). Desmarque a baixa ou lance a compra antes.`); }
+      const r = await sb.from('movimentos_estoque').insert({fazenda_id:E.fazenda.id, data:d, tipo:'Consumo', produto_id:prod, local_id:g('g_local').value, quantidade:-qtd,
+        observacao:`${t} em ${sel.map(i => A.aP[i.value]?.codigo).join(', ')}`}).select('id').single();
+      if (r.error) { g('g_sal').disabled = false; return erro(r.error.message); }
+      movId = r.data.id;
+    }
+    // uma linha por área, com produto, custo e colheita rateados pela área
+    const linhas = sel.map((i, k) => { const ha = Number(i.dataset.ha||0), fr = sel.length === 1 ? 1 : (haTot ? ha / sel.reduce((s,x) => s + Number(x.dataset.ha||0), 0) : 1/sel.length);
+      const rr = v => v == null ? null : Math.round(v * fr * 1000) / 1000;
+      return {...base, area_id:i.value, area_ha: sel.length === 1 ? haTot : Math.round(haTot*fr*100)/100, quantidade:rr(qtd), colhido:rr(base.colhido), custo: base.custo == null ? null : Math.round(base.custo*fr*100)/100, movimento_id: k === 0 ? movId : null}; });
+    const r = await sb.from('operacoes_agricolas').insert(linhas);
+    g('g_sal').disabled = false;
+    if (r.error) return erro(r.error.message);
+    m.remove(); aviso(`${t} lançada em ${linhas.length} área(s)`); render();
+  };
+  const exc = g('g_exc');
+  if (exc) exc.onclick = async () => {
+    if (!confirm('Excluir esta operação?' + (reg.movimento_id ? ' A baixa no estoque também será desfeita.' : ''))) return;
+    const r = await sb.from('operacoes_agricolas').delete().eq('id', reg.id);
+    if (r.error) return erro(r.error.message);
+    if (reg.movimento_id) await sb.from('movimentos_estoque').delete().eq('id', reg.movimento_id);
+    m.remove(); aviso('Excluída'); render();
+  };
+}
+
+async function telaChuvas(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const ch = await todas(() => sb.from('chuvas').select('*').eq('fazenda_id', E.fazenda.id).order('data', {ascending:false}));
+  const anos = [...new Set([hojeISO().slice(0,4), ...ch.map(c => c.data.slice(0,4))])].sort().reverse();
+  const MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const pluvs = [...new Set(ch.map(c => c.pluviometro).filter(Boolean))].sort();
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Chuvas – ${esc(E.fazenda.nome)}</h2>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Lançar chuva</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="cano">${anos.map(a => `<option>${a}</option>`).join('')}</select>
+      <select id="cpl"><option value="">Pluviômetro: todos (média)</option>${pluvs.map(p => `<option>${esc(p)}</option>`).join('')}</select></div>
+    <div class="tabela"><table id="cmes"></table></div>
+    <div class="secao">Lançamentos</div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th class="num">mm</th><th>Pluviômetro</th><th>Observação</th></tr></thead><tbody id="tb"></tbody></table></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formChuva(pluvs);
+  let ls = [];
+  const desenhar = () => {
+    const ano = $('#cano').value, pl = $('#cpl').value;
+    ls = ch.filter(c => c.data.slice(0,4) === ano && (!pl || c.pluviometro === pl));
+    // por dia: média entre pluviômetros quando não há filtro
+    const dia = {}; ls.forEach(c => { (dia[c.data] = dia[c.data] || []).push(Number(c.mm)); });
+    const mes = Array(12).fill(0), dias = Array(12).fill(0);
+    Object.entries(dia).forEach(([d, v]) => { const mm = v.reduce((s,x) => s + x, 0) / v.length; mes[+d.slice(5,7)-1] += mm; if (mm > 0) dias[+d.slice(5,7)-1]++; });
+    let ac = 0; const acum = mes.map(v => ac += v);
+    $('#cmes').innerHTML = `<thead><tr><th>${ano}</th>${MES.map(m => `<th class="num">${m}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
+      <tr><td>Chuva (mm)</td>${mes.map(v => `<td class="num">${v ? fmtNum(v,1) : ''}</td>`).join('')}<td class="num"><b>${fmtNum(ac,1)}</b></td></tr>
+      <tr><td>Dias com chuva</td>${dias.map(v => `<td class="num">${v || ''}</td>`).join('')}<td class="num">${dias.reduce((s,v) => s + v, 0)}</td></tr>
+      <tr><td>Acumulado</td>${acum.map(v => `<td class="num">${v ? fmtNum(v,0) : ''}</td>`).join('')}<td></td></tr></tbody>`;
+    $('#tb').innerHTML = ls.map((c,i) => `<tr class="${ehAdmin()?'clic':''}" data-i="${i}"><td>${fD(c.data)}</td><td class="num">${fmtNum(c.mm,1)}</td><td>${esc(c.pluviometro)}</td><td>${esc(c.observacao)}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Nenhuma chuva lançada neste ano</td></tr>';
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = async () => { const c = ls[+tr.dataset.i]; if (!confirm(`Excluir a chuva de ${fmtNum(c.mm,1)} mm em ${fD(c.data)}?`)) return; const r = await sb.from('chuvas').delete().eq('id', c.id); if (r.error) return aviso(r.error.message); aviso('Excluída'); telaChuvas(); });
+  };
+  ['cano','cpl'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Chuvas ' + $('#cano').value, ['Data','mm','Pluviômetro','Observação'], ls.map(c => [fD(c.data), fmtNum(c.mm,1), c.pluviometro, c.observacao]));
+  desenhar();
+}
+
+function formChuva(pluvs){
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Lançar chuva</h3>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Data *</label><input id="c_data" type="date" value="${hojeISO()}" max="${hojeISO()}"></div>
+      <div style="flex:1"><label>Chuva (mm) *</label><input id="c_mm" inputmode="decimal"></div></div>
+    <label>Pluviômetro / local</label><input id="c_pl" list="c_pls" value="${esc(pluvs[0]||'')}"><datalist id="c_pls">${pluvs.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
+    <label>Observação</label><input id="c_obs">
+    <div class="msg erro" id="c_erro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="c_can">Cancelar</button><button class="btn" id="c_sal">Salvar</button></div></div>`;
+  document.body.appendChild(m);
+  const g = id => m.querySelector('#'+id);
+  g('c_can').onclick = () => m.remove(); g('c_mm').focus();
+  g('c_sal').onclick = async () => {
+    const mm = Number(String(g('c_mm').value).replace(',', '.'));
+    if (!g('c_data').value) { g('c_erro').textContent = 'Informe a data'; g('c_erro').style.display = 'block'; return; }
+    if (!(mm >= 0) || g('c_mm').value === '') { g('c_erro').textContent = 'Informe os milímetros'; g('c_erro').style.display = 'block'; return; }
+    const r = await sb.from('chuvas').insert({fazenda_id:E.fazenda.id, data:g('c_data').value, mm, pluviometro:g('c_pl').value.trim()||null, observacao:g('c_obs').value.trim()||null});
+    if (r.error) { g('c_erro').textContent = r.error.message; g('c_erro').style.display = 'block'; return; }
+    m.remove(); aviso('Chuva lançada'); telaChuvas();
   };
 }
 
