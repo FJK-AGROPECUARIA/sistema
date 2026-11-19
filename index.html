@@ -850,7 +850,8 @@ function tamBolinha(ls){ const n = ['M','F',null].filter(sx => (ls||[]).some(l =
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
-    <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo nome">
+    <div class="filtros"><span style="position:relative;flex:none;width:260px;max-width:100%"><input id="mbusca" placeholder="Procurar área" style="width:100%;min-width:0;padding-right:32px">
+      <button id="mlimpa" title="Limpar pesquisa" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;color:var(--cinza);cursor:pointer;padding:2px 6px;display:none">✕</button></span>
       <span class="rodape" style="margin:auto 0">Exibir:</span>
       <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_nomes" style="width:auto"> Nome das áreas</label>
       <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_lotes" style="width:auto"> Lotes</label></div><div id="mapa"></div>`;
@@ -886,7 +887,7 @@ async function telaMapa(){
   let marcada = null, listaB = null;
   const desmarcar = () => { if (marcada) { marcada.p.setStyle({color:'#fff', weight:1.5, fillColor:marcada.cor, fillOpacity:.55}); marcada.p.getElement()?.classList.remove('pisca'); marcada = null; } };
   const marcar = c => { desmarcar(); marcada = c; c.p.setStyle({color:'#ffeb3b', weight:4, fillColor:'#ffeb3b', fillOpacity:.75}); c.p.bringToFront(); c.p.getElement()?.classList.add('pisca');
-    mapa.fitBounds(c.p.getBounds(), {maxZoom:16, padding:[40,40]}); $('#mbusca').value = c.a.codigo; fecharB(); };
+    mapa.fitBounds(c.p.getBounds(), {maxZoom:16, padding:[40,40]}); $('#mbusca').value = c.a.codigo; $('#mlimpa').style.display = ''; fecharB(); };
   const fecharB = () => { if (listaB) { listaB.remove(); listaB = null; } };
   const achados = () => { const f = semAcento($('#mbusca').value.trim()); return f ? Object.values(camadas).filter(c => semAcento(c.a.codigo + ' ' + (c.a.nome||'')).includes(f)).sort((x,y) => x.a.codigo.localeCompare(y.a.codigo, 'pt', {numeric:true})) : []; };
   $('#mbusca').oninput = () => { const ls = achados(); fecharB(); if (!ls.length && !$('#mbusca').value.trim()) { desmarcar(); return; }
@@ -896,6 +897,8 @@ async function telaMapa(){
     listaB.addEventListener('mousedown', e => e.preventDefault());
     listaB.onclick = e => { const d = e.target.closest('.cb-op'); if (d) marcar(ls[+d.dataset.k]); }; };
   $('#mbusca').onblur = () => setTimeout(fecharB, 150);
+  $('#mbusca').addEventListener('input', () => { $('#mlimpa').style.display = $('#mbusca').value ? '' : 'none'; });
+  $('#mlimpa').onclick = () => { $('#mbusca').value = ''; $('#mlimpa').style.display = 'none'; fecharB(); desmarcar(); };
   $('#mbusca').onkeydown = e => { if (e.key === 'Enter') { const ls = achados(); if (ls.length) marcar(ls[0]); e.preventDefault(); } else if (e.key === 'Escape') fecharB(); };
   if (grupo.getLayers().length) mapa.fitBounds(grupo.getBounds(), {padding:[10,10]}); else mapa.setView([-5.5,-48.5], 12);
   // bolinha arrastavel: arraste o lote ate outro pasto para movimentar
