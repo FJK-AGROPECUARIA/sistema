@@ -74,6 +74,14 @@ tr.clic:hover td{background:#f7faf3}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:2000}
 .caixa{background:#fff;border-radius:16px 16px 0 0;padding:16px 18px;width:100%;max-width:760px;max-height:94vh;overflow:auto}
 .fgrid.auto .fc label{white-space:normal;overflow:visible}
+#mapa.sem-nomes .leaflet-tooltip.rotulo{display:none}
+.cb{position:relative;min-width:0}.cb-oculto{display:none!important}
+.cb-in{cursor:pointer;padding-right:30px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 10px center;text-overflow:ellipsis}
+.cb-in::placeholder{color:#222}.cb-in:focus::placeholder{color:#999}.cb-in:disabled{background-color:#f2f2f2;cursor:default}
+.cb-lista{position:fixed;z-index:5000;background:#fff;border:1px solid var(--borda);border-radius:9px;box-shadow:0 6px 18px rgba(0,0,0,.18);overflow:auto;font-size:14px}
+.cb-op{padding:8px 11px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cb-op:hover,.cb-op.foco{background:#eef4e6}.cb-op.sel{font-weight:700;color:var(--verde)}
+.cb-vazio{padding:8px 11px;color:var(--cinza)}
+#mapa.sem-lotes .bol-lote{display:none}
 @media(min-width:700px){.modal{align-items:center}.caixa{border-radius:16px}}
 .caixa h3{margin:0 0 6px}
 .acoes{display:flex;gap:8px;margin-top:16px}
@@ -485,9 +493,61 @@ function gradeAuto(cx){
     } else grid = null;
   }
 }
+// caixa de seleção com busca: clicou, abre a lista para baixo e dá para digitar e filtrar (vale para todos os selects)
+const semAcento = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const PVAL = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value'), PIDX = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+let cbAberta = null;
+function comboBusca(sel){
+  if (sel.dataset.cb || sel.multiple || sel.size > 1 || sel.id === 'selFaz' || !sel.parentNode) return; sel.dataset.cb = '1';
+  const w = document.createElement('div'); w.className = 'cb'; sel.before(w);
+  const inp = document.createElement('input'); inp.className = 'cb-in'; inp.autocomplete = 'off'; inp.setAttribute('autocorrect', 'off'); inp.spellcheck = false;
+  w.append(inp, sel); sel.classList.add('cb-oculto');
+  if (sel.getAttribute('style')) { inp.style.cssText = sel.getAttribute('style'); inp.style.display = ''; }
+  const texto = () => { const o = sel.options[PIDX.get.call(sel)]; return o ? o.text : ''; };
+  const mostrar = () => { if (document.activeElement !== inp) inp.value = /^—/.test(texto()) ? '' : texto(); inp.placeholder = texto() || '— escolha —'; inp.disabled = sel.disabled; };
+  Object.defineProperty(sel, 'value', {get(){ return PVAL.get.call(this); }, set(v){ PVAL.set.call(this, v); mostrar(); }, configurable:true});
+  Object.defineProperty(sel, 'selectedIndex', {get(){ return PIDX.get.call(this); }, set(v){ PIDX.set.call(this, v); mostrar(); }, configurable:true});
+  new MutationObserver(() => { mostrar(); w.style.display = sel.style.display === 'none' ? 'none' : ''; }).observe(sel, {childList:true, subtree:true, attributes:true, attributeFilter:['style','disabled']});
+  let lista = null, itens = [], foco = -1;
+  const fechar = () => { if (lista) { lista.remove(); lista = null; } if (cbAberta && cbAberta.fechar === fechar) cbAberta = null; mostrar(); };
+  const escolher = i => { const o = sel.options[i]; if (o) { PIDX.set.call(sel, i); sel.dispatchEvent(new Event('input', {bubbles:true})); sel.dispatchEvent(new Event('change', {bubbles:true})); } fechar(); inp.blur(); };
+  const desenhar = () => {
+    const f = semAcento(inp.value), ops = [...sel.options];
+    itens = ops.map((o, i) => ({o, i})).filter(x => !x.o.disabled && x.o.style.display !== 'none' && (!f || semAcento(x.o.text).includes(f)));
+    if (foco >= itens.length) foco = itens.length - 1;
+    lista.innerHTML = itens.length ? itens.map((x, k) => `<div class="cb-op${x.i === PIDX.get.call(sel) ? ' sel' : ''}${k === foco ? ' foco' : ''}" data-k="${k}">${esc(x.o.text) || '&nbsp;'}</div>`).join('') : '<div class="cb-vazio">Nada encontrado</div>';
+    posicionar(); lista.querySelector('.foco')?.scrollIntoView({block:'nearest'});
+  };
+  const posicionar = () => { if (!lista) return;
+    const r = inp.getBoundingClientRect(), h = Math.min(280, window.innerHeight - r.bottom - 8);
+    Object.assign(lista.style, {left: r.left + 'px', width: Math.max(r.width, 200) + 'px'});
+    if (h < 140 && r.top > 300) { lista.style.top = ''; lista.style.bottom = (window.innerHeight - r.top + 2) + 'px'; lista.style.maxHeight = Math.min(280, r.top - 8) + 'px'; }
+    else { lista.style.bottom = ''; lista.style.top = (r.bottom + 2) + 'px'; lista.style.maxHeight = Math.max(h, 120) + 'px'; }
+  };
+  const abrir = () => { if (sel.disabled || lista) return; if (cbAberta) cbAberta.fechar(); cbAberta = {fechar, posicionar};
+    lista = document.createElement('div'); lista.className = 'cb-lista'; document.body.appendChild(lista);
+    lista.addEventListener('mousedown', e => e.preventDefault());
+    lista.addEventListener('click', e => { const d = e.target.closest('.cb-op'); if (d) escolher(itens[+d.dataset.k].i); });
+    inp.value = ''; foco = -1; desenhar(); foco = itens.findIndex(x => x.i === PIDX.get.call(sel)); desenhar(); };
+  inp.addEventListener('focus', abrir); inp.addEventListener('click', abrir);
+  inp.addEventListener('input', () => { if (!lista) abrir(); foco = 0; desenhar(); });
+  inp.addEventListener('blur', () => setTimeout(fechar, 150));
+  inp.addEventListener('keydown', e => {
+    if (!lista && (e.key === 'ArrowDown' || e.key === 'Enter')) { abrir(); e.preventDefault(); return; }
+    if (e.key === 'ArrowDown') { foco = Math.min(foco + 1, itens.length - 1); desenhar(); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { foco = Math.max(foco - 1, 0); desenhar(); e.preventDefault(); }
+    else if (e.key === 'Enter') { if (itens[foco]) escolher(itens[foco].i); e.preventDefault(); }
+    else if (e.key === 'Escape') { fechar(); inp.blur(); }
+    else if (e.key === 'Tab') fechar(); });
+  mostrar();
+}
+window.addEventListener('scroll', e => { if (cbAberta && !(e.target.classList && e.target.classList.contains('cb-lista'))) cbAberta.posicionar(); }, true);
+window.addEventListener('resize', () => { if (cbAberta) cbAberta.posicionar(); });
 new MutationObserver(ms => { for (const mu of ms) for (const n of mu.addedNodes) { if (n.nodeType !== 1) continue;
   if (n.classList.contains('modal')) gradeAuto(n.querySelector(':scope > .caixa'));
-  else if (n.classList.contains('caixa') && n.parentElement?.classList.contains('modal')) gradeAuto(n); } }).observe(document.body, {childList:true, subtree:true});
+  else if (n.classList.contains('caixa') && n.parentElement?.classList.contains('modal')) gradeAuto(n);
+  if (n.classList.contains('cb') || n.classList.contains('cb-lista')) continue;
+  (n.tagName === 'SELECT' ? [n] : n.querySelectorAll('select')).forEach(comboBusca); } }).observe(document.body, {childList:true, subtree:true});
 // largura do campo numa grade de 6 colunas (o.w); padrão pelo tipo
 const larguraCampo = o => o.w || (o.tipo === 'bool' ? 6 : o.tipo === 'color' ? 1 : (o.tipo === 'number' || o.tipo === 'date') ? 2 : 3);
 function gradeCampos(campos, reg){
@@ -775,7 +835,15 @@ async function telaModulos(){
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
-    <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo código"></div><div id="mapa"></div>`;
+    <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo nome">
+      <span class="rodape" style="margin:auto 0">Exibir:</span>
+      <label class="chk" style="margin:0"><input type="checkbox" id="ex_nomes"> Nome das áreas</label>
+      <label class="chk" style="margin:0"><input type="checkbox" id="ex_lotes"> Lotes</label></div><div id="mapa"></div>`;
+  { const ex = (() => { try { return JSON.parse(localStorage.getItem('fjk_exibir') || '{}'); } catch(e) { return {}; } })();
+    const aplicar = () => { $('#mapa').classList.toggle('sem-nomes', !$('#ex_nomes').checked); $('#mapa').classList.toggle('sem-lotes', !$('#ex_lotes').checked);
+      try { localStorage.setItem('fjk_exibir', JSON.stringify({nomes:$('#ex_nomes').checked, lotes:$('#ex_lotes').checked})); } catch(e) {} };
+    $('#ex_nomes').checked = ex.nomes !== false; $('#ex_lotes').checked = ex.lotes !== false;
+    $('#ex_nomes').onchange = aplicar; $('#ex_lotes').onchange = aplicar; aplicar(); }
   $('#volta').onclick = () => ir('inicio');
   const [{data:areas}, {data:mods}, {data:ma}, lotes] = await Promise.all([
     sb.from('areas').select('*').eq('fazenda_id', fid),
@@ -809,7 +877,7 @@ async function telaMapa(){
       const cor = f && !m ? '#d32f2f' : m && !f ? '#1565c0' : '#6d6d6d';
       const lin = [m ? m + ' M' : '', f ? f + ' F' : '', o ? o + '*' : ''].filter(Boolean);
       const t = lin.length === 1 ? 42 : lin.length === 2 ? 50 : 58;
-      return L.divIcon({className:'', iconSize:[t,t], iconAnchor:[t/2,t/2],
+      return L.divIcon({className:'bol-lote', iconSize:[t,t], iconAnchor:[t/2,t/2],
         html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:11px;font-weight:800;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:grab;white-space:nowrap">${lin.map(x => `<span>${x}</span>`).join('')}</div>`}); };
     Object.values(camadas).forEach(({p, a, ls}) => {
       const cab = ls.reduce((s,l) => s + l.quantidade, 0); if (!cab) return;
