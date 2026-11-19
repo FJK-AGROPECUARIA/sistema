@@ -877,6 +877,9 @@ async function telaMapa(){
     const p = noCentro(L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:corMod[a.id] || a.cor || '#a7c232', fillOpacity:.55}), a.geometria).addTo(grupo);
     p.bindTooltip(cab && !podeEditar() ? `${esc(a.codigo)}<br>${cab}` : esc(a.codigo), {permanent:true, direction:cab && podeEditar() ? 'bottom' : 'center', offset:cab && podeEditar() ? [0, tamBolinha(ls) / 2 + 2] : [0,0], className:'rotulo'});
     p.on('click', () => fichaArea(a, ls, modDe[a.id]));
+    // passar o mouse: área fica amarela (se não estiver marcada pela pesquisa)
+    p.on('mouseover', () => { if (!p.getElement()?.classList.contains('pisca')) p.setStyle({fillColor:'#fdd835', fillOpacity:.7, color:'#fff59d', weight:3}); });
+    p.on('mouseout', () => { if (!p.getElement()?.classList.contains('pisca')) p.setStyle({fillColor:corMod[a.id] || a.cor || '#a7c232', fillOpacity:.55, color:'#fff', weight:1.5}); });
     camadas[a.codigo.toLowerCase()] = {p, a, ls, cor:corMod[a.id] || a.cor || '#a7c232'};
   });
   // pesquisa: lista as áreas com o texto digitado; ao escolher, só aquela fica amarela piscando
