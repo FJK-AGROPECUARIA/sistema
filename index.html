@@ -161,7 +161,7 @@ function render(){
     lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico,
     animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual,
     finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
-    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
+    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -192,6 +192,12 @@ async function telaInicio(){
       ${q('animais','🏷️','Animais', fmtNum(nAni,0)+' ativos')}
       ${q('pesagem','⚖️','Pesagem no curral','Brinco ou chip + peso')}
       ${q('histind','🗂️','Histórico individual','Pesagens, mortes, vendas...')}
+    </div>
+    <div class="secao">Reprodução</div>
+    <div class="grade">
+      ${q('matrizes','🐮','Matrizes','Situação, partos, crias')}
+      ${q('lancrep','💉','Lançar reprodutivo','Inseminação, diagnóstico, parição')}
+      ${q('histrep','📊','Histórico reprodutivo','Taxa de prenhez e partos')}
     </div>
     <div class="secao">Estoque de insumos</div>
     <div class="grade">
@@ -1398,6 +1404,168 @@ async function telaMovEst(){
   $('#csv').onclick = () => baixarCSV('Movimentações de estoque', ['Data','Operação','Produto','Unidade','Local','Quantidade','Valor unitário','Fornecedor / cliente','Documento','Observação'],
     ls.map(m => [fD(m.data), m.tipo, S.pP[m.produto_id]?.nome, S.pP[m.produto_id]?.unidade, S.pL[m.local_id]?.nome, fQ(m.quantidade), m.valor_unitario!=null?fmtNum(m.valor_unitario):'', m.pessoa, m.documento, m.observacao]));
   desenhar();
+}
+
+// ---------- Reprodução ----------
+const OPS_REP = ['Inseminação','Diagnóstico de gestação','Parição','Desmama'];
+const COR_SIT = {Prenhe:'#e7f3df', 'Pós parto':'#e3eefc', Apta:'#fff4d6', Jovem:'#eee'};
+const separarCodigos = t => [...new Set(String(t||'').toUpperCase().split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))];
+
+async function telaMatrizes(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const B = await baseFazenda();
+  const fem = await todas(() => sb.from('animais').select('id,brinco,chip,raca,data_nascimento,peso_atual,area_id,situacao_reprodutiva,n_partos,ordem_paricao,data_prevista_parto,precoce').eq('fazenda_id', E.fazenda.id).eq('ativo', true).eq('sexo', 'F').order('brinco'));
+  const sits = ['Prenhe','Apta','Pós parto','Jovem'];
+  const cont = s => fem.filter(a => (a.situacao_reprodutiva||'Sem situação') === s).length;
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Matrizes – ${esc(E.fazenda.nome)}</h2>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Lançar</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="grade" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin-bottom:10px">
+      ${sits.map(s => `<div class="quad" data-s="${s}" style="min-height:64px;padding:8px;background:${COR_SIT[s]}"><b>${fmtNum(cont(s),0)}</b><span>${s}</span></div>`).join('')}</div>
+    <div class="filtros"><input id="rbus" placeholder="Brinco ou chip" inputmode="numeric">
+      <select id="rsit"><option value="">Situação: todas</option>${sits.map(s => `<option>${s}</option>`).join('')}<option>Sem situação</option></select>
+      <select id="rord"><option value="">Ordem: todas</option><option>Nulípara</option><option>Primípara</option><option>Multípara</option></select>
+      <select id="rarea"><option value="">Área: todas</option>${B.areas.map(a => `<option value="${a.id}">${esc(a.codigo)}</option>`).join('')}</select></div>
+    <div class="tabela"><table><thead><tr><th>Brinco</th><th>Idade</th><th>Raça</th><th>Situação</th><th class="num">Partos</th><th>Ordem</th><th>Parto previsto</th><th>Área</th><th class="num">Peso</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formReprodutivo({});
+  document.querySelectorAll('[data-s]').forEach(d => d.onclick = () => { $('#rsit').value = d.dataset.s; desenhar(); });
+  let ls = [];
+  const desenhar = () => {
+    const b = $('#rbus').value.trim().toUpperCase(), s = $('#rsit').value, o = $('#rord').value, ar = $('#rarea').value;
+    ls = fem.filter(a => (!b || a.brinco.includes(b) || (a.chip||'').includes(b)) && (!s || (a.situacao_reprodutiva||'Sem situação') === s) && (!o || a.ordem_paricao === o) && (!ar || a.area_id === ar));
+    const mostra = ls.slice(0, 800);
+    $('#tb').innerHTML = mostra.map((a,i) => `<tr class="clic" data-i="${i}"><td><b>${esc(a.brinco)}</b>${a.precoce?' <span class="pill">precoce</span>':''}</td><td>${idade(a.data_nascimento)}</td><td>${esc(a.raca)}</td>
+      <td><span class="pill" style="background:${COR_SIT[a.situacao_reprodutiva]||'#fff'}">${esc(a.situacao_reprodutiva||'–')}</span></td><td class="num">${a.n_partos||''}</td><td>${esc(a.ordem_paricao)}</td><td>${fD(a.data_prevista_parto)}</td><td>${esc(B.areaPor[a.area_id]||'')}</td><td class="num">${fmtNum(a.peso_atual,0)}</td></tr>`).join('')
+      || '<tr><td colspan="9" class="vazio">Nenhuma fêmea encontrada</td></tr>';
+    $('#rod').textContent = `${fmtNum(ls.length,0)} fêmeas` + (ls.length > mostra.length ? ` (mostrando ${mostra.length}; use os filtros ou exporte)` : '');
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaReprodutiva(mostra[+tr.dataset.i].id));
+  };
+  $('#rbus').oninput = desenhar; ['rsit','rord','rarea'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Matrizes', ['Brinco','Chip','Idade','Raça','Situação','Partos','Ordem','Parto previsto','Área','Peso'], ls.map(a => [a.brinco, a.chip, idade(a.data_nascimento), a.raca, a.situacao_reprodutiva, a.n_partos, a.ordem_paricao, fD(a.data_prevista_parto), B.areaPor[a.area_id]||'', fmtNum(a.peso_atual,0)]));
+  desenhar();
+}
+
+async function fichaReprodutiva(id){
+  const [{data:a}, {data:evs}] = await Promise.all([
+    sb.from('animais').select('*').eq('id', id).single(),
+    sb.from('eventos_reprodutivos').select('*').eq('animal_id', id).order('data', {ascending:false}).order('criado_em', {ascending:false})]);
+  if (!a) return aviso('Animal não encontrado');
+  const {data:crias} = await sb.from('animais').select('id,brinco,sexo,data_nascimento,peso_atual,status').eq('fazenda_id', a.fazenda_id).eq('mae_brinco', a.brinco).order('data_nascimento', {ascending:false});
+  const det = e => [e.tipo_cobertura, e.reprodutor ? 'Touro ' + e.reprodutor : '', e.diagnostico === true ? 'Prenhe' : e.diagnostico === false ? 'Vazia' : '', e.tipo_paricao, e.cria_brinco ? 'Cria ' + e.cria_brinco : '', e.observacao].filter(Boolean).join(' · ');
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Brinco ${esc(a.brinco)} <span class="pill" style="background:${COR_SIT[a.situacao_reprodutiva]||'#eee'}">${esc(a.situacao_reprodutiva||'sem situação')}</span></h3>
+    <div class="rodape" style="margin-top:0">${idade(a.data_nascimento)} · ${esc(a.raca||'')} · ${a.n_partos||0} parto(s)${a.ordem_paricao?' · '+esc(a.ordem_paricao):''}${a.data_prevista_parto?' · parto previsto '+fD(a.data_prevista_parto):''}</div>
+    ${podeEditar() ? `<div class="grade" style="grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0">${OPS_REP.map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:50px">${o.replace('Diagnóstico de gestação','Diagnóstico')}</button>`).join('')}</div>` : ''}
+    <div class="secao">Crias (${(crias||[]).length})</div>
+    <div class="tabela"><table><thead><tr><th>Brinco</th><th>Sexo</th><th>Idade</th><th class="num">Peso</th><th>Status</th></tr></thead><tbody>
+      ${(crias||[]).map(c => `<tr><td><b>${esc(c.brinco)}</b></td><td>${esc(c.sexo)}</td><td>${idade(c.data_nascimento)}</td><td class="num">${fmtNum(c.peso_atual,0)}</td><td>${esc(c.status)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhuma cria registrada</td></tr>'}</tbody></table></div>
+    <div class="secao">Histórico reprodutivo</div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th>Detalhe</th></tr></thead><tbody>
+      ${(evs||[]).map(e => `<tr><td>${fD(e.data)}</td><td>${esc(e.operacao)}</td><td>${esc(det(e))}</td></tr>`).join('') || '<tr><td colspan="3" class="vazio">Sem lançamentos</td></tr>'}</tbody></table></div>
+    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#fch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
+  m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formReprodutivo({operacao:b.dataset.op, brincos:a.brinco}); });
+}
+
+async function formReprodutivo(pre){
+  const {data:reps} = await sb.from('eventos_reprodutivos').select('reprodutor').eq('fazenda_id', E.fazenda.id).not('reprodutor', 'is', null).order('data', {ascending:false}).limit(1000);
+  const touros = [...new Set((reps||[]).map(r => r.reprodutor))];
+  const B = await baseFazenda();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Lançamento reprodutivo</h3>
+    <label>Operação *</label><select id="r_op">${OPS_REP.map(o => `<option ${o===(pre.operacao||'Inseminação')?'selected':''}>${o}</option>`).join('')}</select>
+    <label>Data *</label><input id="r_data" type="date" value="${hojeISO()}" max="${hojeISO()}">
+    <label>Brinco(s) da(s) fêmea(s) *</label><textarea id="r_b" rows="3" inputmode="numeric" placeholder="Um ou vários, separados por espaço, vírgula ou linha">${esc(pre.brincos||'')}</textarea>
+    <div id="r_cont" class="rodape"></div>
+    <div id="b_ins"><label>Tipo de cobertura</label><select id="r_tc">${['IATF (Inseminação Artificial em Tempo Fixo)','IA (Inseminação Artificial)','Monta natural','Repasse com touro'].map(x => `<option>${x}</option>`).join('')}</select></div>
+    <div id="b_rep"><label>Reprodutor (touro ou sêmen)</label><input id="r_rep" list="touros"><datalist id="touros">${touros.map(t => `<option value="${esc(t)}">`).join('')}</datalist></div>
+    <div id="b_diag"><label>Resultado *</label><select id="r_diag"><option value="true">Prenhe</option><option value="false">Vazia</option></select></div>
+    <div id="b_par"><label>Tipo de parição</label><select id="r_tp"><option>Normal</option><option>Distócico (com ajuda)</option><option>Aborto/Natimorto</option></select>
+      <div id="b_cria"><div style="display:flex;gap:8px"><div style="flex:2"><label>Brinco da cria</label><input id="r_cria" inputmode="numeric"></div>
+        <div style="flex:1"><label>Sexo da cria</label><select id="r_csexo"><option value="">—</option><option value="M">Macho</option><option value="F">Fêmea</option></select></div>
+        <div style="flex:1"><label>Peso (kg)</label><input id="r_cpeso" inputmode="decimal"></div></div>
+        <div class="rodape">Com brinco e sexo, a cria já é cadastrada como nascimento, ligada à mãe.</div></div></div>
+    <label>Observação</label><input id="r_obs">
+    <div class="msg erro" id="r_erro" style="display:none"></div><div id="r_ok"></div>
+    <div class="acoes"><button class="btn sec" id="r_can">Fechar</button><button class="btn" id="r_sal">Lançar</button></div></div>`;
+  document.body.appendChild(m);
+  const g = id => m.querySelector('#'+id);
+  const atualizar = () => {
+    const op = g('r_op').value, n = separarCodigos(g('r_b').value).length;
+    g('b_ins').style.display = op === 'Inseminação' ? '' : 'none';
+    g('b_rep').style.display = ['Inseminação','Diagnóstico de gestação'].includes(op) ? '' : 'none';
+    g('b_diag').style.display = op === 'Diagnóstico de gestação' ? '' : 'none';
+    g('b_par').style.display = op === 'Parição' ? '' : 'none';
+    g('b_cria').style.display = op === 'Parição' && n <= 1 && !/Aborto/.test(g('r_tp').value) ? '' : 'none';
+    g('r_cont').textContent = n ? `${n} fêmea(s)` : '';
+  };
+  g('r_op').onchange = atualizar; g('r_b').oninput = atualizar; g('r_tp').onchange = atualizar; atualizar();
+  g('r_can').onclick = () => { m.remove(); if (['matrizes','histrep'].includes(E.tela)) render(); };
+  g('r_sal').onclick = async () => {
+    const erro = t => { g('r_erro').textContent = t; g('r_erro').style.display = t ? 'block' : 'none'; };
+    erro('');
+    const op = g('r_op').value, brincos = separarCodigos(g('r_b').value), d = g('r_data').value;
+    if (!d) return erro('Informe a data'); if (!brincos.length) return erro('Informe o brinco da fêmea');
+    const cria = op === 'Parição' && brincos.length === 1 && !/Aborto/.test(g('r_tp').value) ? g('r_cria').value.trim().toUpperCase() : '';
+    if (cria && cria.length > 5) return erro('Brinco da cria com mais de 5 dígitos: confira');
+    if (cria && !g('r_csexo').value) return erro('Informe o sexo da cria');
+    const p = {fazenda_id:E.fazenda.id, operacao:op, data:d, brincos, tipo_cobertura: op==='Inseminação' ? g('r_tc').value : '', reprodutor:g('r_rep').value.trim(),
+      diagnostico: op==='Diagnóstico de gestação' ? g('r_diag').value : null, tipo_paricao: op==='Parição' ? g('r_tp').value : '', cria_brinco:cria, observacao:g('r_obs').value.trim()};
+    g('r_sal').disabled = true;
+    const r = await sb.rpc('lancar_reprodutivo', {p});
+    let msg = '';
+    if (!r.error && cria && r.data.lancados) {
+      const mae = (await buscarAnimal(brincos[0]));
+      const r2 = await sb.rpc('cadastrar_animal', {p:{fazenda_id:E.fazenda.id, origem:'Nascimento', data:d, brinco:cria, sexo:g('r_csexo').value, raca:mae?.raca||'', mae_brinco:mae?.brinco||brincos[0], area_id:mae?.area_id||'', categoria_id:'', peso:g('r_cpeso').value.replace(',','.'), observacao:''}});
+      msg = r2.error ? ` · cria não cadastrada: ${r2.error.message.replace(/^.*?: /,'')}` : ` · cria ${cria} cadastrada`;
+    }
+    g('r_sal').disabled = false;
+    if (r.error) return erro(r.error.message.replace(/^.*?: /,''));
+    const er = r.data.erros || [];
+    g('r_ok').innerHTML = `<div class="msg ok">${r.data.lancados} lançado(s)${msg}</div>` + (er.length ? `<div class="msg erro">${er.map(esc).join('<br>')}</div>` : '');
+    if (!er.length) { g('r_b').value = ''; g('r_cria').value = ''; g('r_cpeso').value = ''; atualizar(); g('r_b').focus(); }
+    cacheBase = null;
+  };
+  g('r_b').focus();
+}
+
+async function telaHistRep(){
+  const ini = new Date(Date.now() - 90*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Histórico reprodutivo</h2>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Lançar</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="h_ini" type="date" value="${ini}"><input id="h_fim" type="date" value="${hojeISO()}">
+      <select id="h_op"><option value="">Todas as operações</option>${OPS_REP.map(o => `<option>${o}</option>`).join('')}</select>
+      <input id="h_b" placeholder="Brinco ou touro"><button class="btn" id="h_ver">Visualizar</button></div>
+    <div class="grade" id="h_ind" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:10px"></div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Fêmea</th><th>Operação</th><th>Cobertura</th><th>Reprodutor</th><th>Resultado / parição</th><th>Cria</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formReprodutivo({});
+  let rows = [];
+  const buscar = async () => {
+    $('#tb').innerHTML = '<tr><td colspan="7" class="vazio">Carregando...</td></tr>';
+    rows = await todas(() => { let q = sb.from('eventos_reprodutivos').select('*').eq('fazenda_id', E.fazenda.id).gte('data', $('#h_ini').value).lte('data', $('#h_fim').value).order('data', {ascending:false}).order('id');
+      if ($('#h_op').value) q = q.eq('operacao', $('#h_op').value); return q; });
+    const b = $('#h_b').value.trim().toUpperCase();
+    if (b) rows = rows.filter(e => e.femea_brinco.includes(b) || String(e.reprodutor||'').toUpperCase().includes(b));
+    const n = o => rows.filter(e => e.operacao === o).length;
+    const dg = rows.filter(e => e.operacao === 'Diagnóstico de gestação'), pos = dg.filter(e => e.diagnostico).length;
+    const ab = rows.filter(e => e.operacao === 'Parição' && /Aborto/.test(e.tipo_paricao||'')).length;
+    const card = (v, t) => `<div class="quad" style="min-height:64px;padding:8px;cursor:default"><b>${v}</b><span>${t}</span></div>`;
+    $('#h_ind').innerHTML = card(fmtNum(n('Inseminação'),0), 'inseminações') + card(fmtNum(dg.length,0), 'diagnósticos') + card(dg.length ? fmtNum(pos/dg.length*100,1)+'%' : '–', 'taxa de prenhez')
+      + card(fmtNum(n('Parição') - ab,0), 'partos') + card(fmtNum(ab,0), 'abortos/natimortos') + card(fmtNum(n('Desmama'),0), 'desmamas');
+    const mostra = rows.slice(0, 1000);
+    $('#tb').innerHTML = mostra.map(e => `<tr class="${e.animal_id?'clic':''}" data-a="${e.animal_id||''}"><td>${fD(e.data)}</td><td><b>${esc(e.femea_brinco)}</b></td><td>${esc(e.operacao)}</td><td>${esc(e.tipo_cobertura)}</td><td>${esc(e.reprodutor)}</td>
+      <td>${e.diagnostico===true?'Prenhe':e.diagnostico===false?'Vazia':esc(e.tipo_paricao)}</td><td>${esc(e.cria_brinco)}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nada no período</td></tr>';
+    $('#rod').textContent = `${fmtNum(rows.length,0)} lançamentos` + (rows.length > mostra.length ? ` (mostrando ${mostra.length})` : '');
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaReprodutiva(tr.dataset.a));
+  };
+  $('#h_ver').onclick = buscar;
+  $('#csv').onclick = () => baixarCSV('Histórico reprodutivo', ['Data','Fêmea','Operação','Cobertura','Reprodutor','Resultado / parição','Cria','Observação'],
+    rows.map(e => [fD(e.data), e.femea_brinco, e.operacao, e.tipo_cobertura, e.reprodutor, e.diagnostico===true?'Prenhe':e.diagnostico===false?'Vazia':e.tipo_paricao, e.cria_brinco, e.observacao]));
+  buscar();
 }
 
 // ---------- Usuários ----------
