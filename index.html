@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FJK Sistema</title>
+<meta name="theme-color" content="#2f5d1e">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--verde:#2f5d1e;--verde2:#4c8a2b;--lima:#a7c232;--fundo:#f3f5f0;--borda:#dde3d6;--texto:#1f2a1a;--cinza:#6b7565;--vermelho:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--texto);font-size:15px}
+header{background:var(--verde);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1000}
+.logo{width:38px;height:38px;border-radius:9px;background:#fff;color:var(--verde);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;letter-spacing:-.5px;flex:none}
+header h1{font-size:16px;margin:0;font-weight:700;line-height:1.1}
+header small{opacity:.8;font-size:12px}
+header .esp{flex:1}
+header select{background:var(--verde2);color:#fff;border:0;border-radius:8px;padding:7px 8px;font-size:14px;max-width:170px}
+.btn{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:600;cursor:pointer;background:var(--verde2);color:#fff}
+.btn.sec{background:#fff;color:var(--verde);border:1px solid var(--borda)}
+.btn.perigo{background:var(--vermelho)}
+.btn.peq{padding:6px 10px;font-size:13px}
+.btn:disabled{opacity:.5}
+main{padding:14px;max-width:1100px;margin:0 auto}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.quad{background:#fff;border:1px solid var(--borda);border-radius:14px;padding:18px 12px;text-align:center;cursor:pointer;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.quad:active{transform:scale(.98)}
+.quad .ic{font-size:30px}
+.quad b{font-size:15px}
+.quad span{font-size:12px;color:var(--cinza)}
+.secao{font-size:13px;font-weight:700;color:var(--cinza);text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px}
+.topo{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.topo h2{margin:0;font-size:20px;flex:1}
+.voltar{background:none;border:0;font-size:22px;cursor:pointer;color:var(--verde);padding:4px 8px}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.filtros input,.filtros select{flex:1;min-width:140px}
+input,select,textarea{font:inherit;padding:10px;border:1px solid var(--borda);border-radius:9px;background:#fff;width:100%}
+label{font-size:13px;color:var(--cinza);display:block;margin:10px 0 4px}
+.tabela{background:#fff;border:1px solid var(--borda);border-radius:12px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:#eef2e8;text-align:left;padding:9px 10px;font-size:12px;color:var(--cinza);white-space:nowrap;position:sticky;top:0}
+td{padding:9px 10px;border-top:1px solid var(--borda);white-space:nowrap}
+tr.clic{cursor:pointer}
+tr.clic:hover td{background:#f7faf3}
+.num{text-align:right}
+.rodape{font-size:13px;color:var(--cinza);margin:8px 2px}
+.vazio{padding:30px;text-align:center;color:var(--cinza)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:2000}
+.caixa{background:#fff;border-radius:16px 16px 0 0;padding:16px;width:100%;max-width:560px;max-height:92vh;overflow:auto}
+@media(min-width:700px){.modal{align-items:center}.caixa{border-radius:16px}}
+.caixa h3{margin:0 0 6px}
+.acoes{display:flex;gap:8px;margin-top:16px}
+.acoes .btn{flex:1}
+.login{max-width:380px;margin:50px auto;background:#fff;border:1px solid var(--borda);border-radius:16px;padding:22px}
+.login .logo{width:64px;height:64px;font-size:22px;margin:0 auto 10px;background:var(--verde);color:#fff}
+.login h2{text-align:center;margin:0 0 4px}
+.login p{text-align:center;color:var(--cinza);margin:0 0 14px;font-size:14px}
+.link{background:none;border:0;color:var(--verde2);font-weight:600;cursor:pointer;padding:8px;width:100%}
+.msg{padding:10px;border-radius:9px;margin-top:10px;font-size:14px}
+.msg.erro{background:#fde8e6;color:var(--vermelho)}
+.msg.ok{background:#e7f3df;color:var(--verde)}
+#mapa{height:calc(100vh - 150px);min-height:380px;border-radius:12px;border:1px solid var(--borda)}
+.rotulo{background:none;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000}
+.pill{display:inline-block;padding:2px 8px;border-radius:20px;background:#eef2e8;font-size:12px}
+.cor{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px}
+.chk{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px}
+.chk input{width:auto}
+.lista-areas{max-height:240px;overflow:auto;border:1px solid var(--borda);border-radius:9px;padding:4px 10px}
+#aviso{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1f2a1a;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:3000;display:none}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="aviso"></div>
+<script>
+const SUPABASE_URL = 'https://jmdjoofjetjcwhpfgyiv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_KuP1vwLUWIAqNDpDdgatxQ_fSkBxhZ1';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const E = {usuario:null, perfil:null, fazendas:[], fazenda:null, papel:null, tela:'inicio'};
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtNum = (v, d=2) => v == null || v === '' ? '' : Number(v).toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtData = v => { if(!v) return ''; const d = new Date(v); return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'}); };
+function aviso(t){ const a=$('#aviso'); a.textContent=t; a.style.display='block'; clearTimeout(a._t); a._t=setTimeout(()=>a.style.display='none',2600); }
+const podeEditar = () => E.perfil?.admin || ['admin','gerente','operador'].includes(E.papel);
+const ehAdmin = () => E.perfil?.admin || E.papel === 'admin';
+
+// ---------- Login ----------
+function telaLogin(modo='entrar', msg=''){
+  const titulos = {entrar:'Entrar', criar:'Criar conta', esqueci:'Recuperar senha'};
+  $('#app').innerHTML = `
+  <div class="login">
+    <div class="logo">FJK</div>
+    <h2>FJK Agropecuária</h2>
+    <p>${titulos[modo]}</p>
+    ${modo==='criar' ? '<label>Seu nome</label><input id="lnome" autocomplete="name">' : ''}
+    <label>Email</label><input id="lemail" type="email" autocomplete="email">
+    ${modo!=='esqueci' ? `<label>Senha</label><input id="lsenha" type="password" autocomplete="${modo==='criar'?'new-password':'current-password'}">` : ''}
+    <div class="acoes"><button class="btn" id="lbtn">${titulos[modo]}</button></div>
+    ${msg}
+    ${modo==='entrar' ? '<button class="link" data-m="criar">Criar conta</button><button class="link" data-m="esqueci">Esqueci a senha</button>' : '<button class="link" data-m="entrar">Voltar para entrar</button>'}
+  </div>`;
+  document.querySelectorAll('.link').forEach(b => b.onclick = () => telaLogin(b.dataset.m));
+  $('#lbtn').onclick = async () => {
+    const email = $('#lemail').value.trim(), senha = $('#lsenha')?.value || '';
+    $('#lbtn').disabled = true;
+    let r;
+    if (modo==='entrar') r = await sb.auth.signInWithPassword({email, password:senha});
+    else if (modo==='criar') r = await sb.auth.signUp({email, password:senha, options:{data:{nome:$('#lnome').value.trim()}, emailRedirectTo: location.href.split('#')[0]}});
+    else r = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.href.split('#')[0]});
+    if (r.error) return telaLogin(modo, `<div class="msg erro">${esc(traduzErro(r.error.message))}</div>`);
+    if (modo==='criar' && !r.data.session) return telaLogin('entrar', '<div class="msg ok">Conta criada. Abra o email de confirmação e depois entre aqui.</div>');
+    if (modo==='esqueci') return telaLogin('entrar', '<div class="msg ok">Enviamos um link para o seu email.</div>');
+  };
+}
+function traduzErro(m){
+  if (/Invalid login/i.test(m)) return 'Email ou senha incorretos.';
+  if (/Email not confirmed/i.test(m)) return 'Confirme o email antes de entrar (veja sua caixa de entrada).';
+  if (/at least 6/i.test(m)) return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (/already registered/i.test(m)) return 'Esse email já tem conta. Use "Entrar".';
+  return m;
+}
+
+// ---------- Início ----------
+async function carregarUsuario(){
+  const {data:{user}} = await sb.auth.getUser();
+  E.usuario = user;
+  if (!user) return telaLogin();
+  const {data:perfil} = await sb.from('perfis').select('*').eq('id', user.id).single();
+  E.perfil = perfil;
+  const {data:faz} = await sb.from('fazendas').select('*').eq('ativo', true).order('nome');
+  E.fazendas = faz || [];
+  const salva = localStorage.getItem('fjk_fazenda');
+  E.fazenda = E.fazendas.find(f => f.id === salva) || E.fazendas[0] || null;
+  await carregarPapel();
+  render();
+}
+async function carregarPapel(){
+  E.papel = null;
+  if (!E.fazenda) return;
+  const {data} = await sb.from('fazenda_usuarios').select('papel').eq('fazenda_id', E.fazenda.id).eq('usuario_id', E.usuario.id).maybeSingle();
+  E.papel = data?.papel || (E.perfil?.admin ? 'admin' : null);
+}
+
+function cabecalho(){
+  return `<header>
+    <div class="logo">FJK</div>
+    <div><h1>FJK Agropecuária</h1><small>${esc(E.perfil?.nome || '')}</small></div>
+    <div class="esp"></div>
+    <select id="selFaz">${E.fazendas.map(f => `<option value="${f.id}" ${f.id===E.fazenda?.id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select>
+  </header>`;
+}
+
+function render(){
+  if (!E.usuario) return telaLogin();
+  const telas = {inicio:telaInicio, mapa:telaMapa, areas:()=>telaCadastro('areas'), modulos:telaModulos, retiros:()=>telaCadastro('retiros'),
+    categorias:()=>telaCadastro('categorias'), produtos:()=>telaCadastro('produtos'), fazendas:()=>telaCadastro('fazendas'), usuarios:telaUsuarios};
+  $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
+  $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
+  if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
+  (telas[E.tela] || telaInicio)();
+}
+function ir(t){ E.tela = t; render(); window.scrollTo(0,0); }
+
+async function telaInicio(){
+  const fid = E.fazenda.id;
+  const cont = async t => (await sb.from(t).select('*', {count:'exact', head:true}).eq('fazenda_id', fid)).count ?? 0;
+  const {data:ha} = await sb.from('areas').select('hectares').eq('fazenda_id', fid);
+  const totHa = (ha||[]).reduce((s,a) => s + Number(a.hectares||0), 0);
+  const [na, nm, nc, np, nr] = await Promise.all(['areas','modulos','categorias_manejo','produtos','retiros'].map(cont));
+  const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
+  $('#corpo').innerHTML = `
+    <div class="secao">Manejo</div>
+    <div class="grade">${q('mapa','🗺️','Mapa da fazenda', fmtNum(totHa)+' ha')}</div>
+    <div class="secao">Cadastros</div>
+    <div class="grade">
+      ${q('areas','▦','Áreas', na+' áreas')}
+      ${q('modulos','◫','Módulos', nm+' módulos')}
+      ${q('retiros','⌂','Retiros', nr+' retiros')}
+      ${q('categorias','🐂','Categorias de manejo', nc+' categorias')}
+      ${q('produtos','📦','Produtos', np+' produtos')}
+    </div>
+    <div class="secao">Gestão</div>
+    <div class="grade">
+      ${q('fazendas','🏠','Fazendas', E.fazendas.length+' fazendas')}
+      ${ehAdmin() ? q('usuarios','👥','Usuários e acessos','Quem usa o sistema') : ''}
+      <div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>
+    </div>`;
+  document.querySelectorAll('.quad[data-t]').forEach(d => d.onclick = () => ir(d.dataset.t));
+  $('#sair').onclick = async () => { await sb.auth.signOut(); E.usuario = null; telaLogin(); };
+}
+
+// ---------- Cadastros genéricos ----------
+const CAD = {
+  areas: {tabela:'areas', titulo:'Áreas', ordem:'codigo', porFazenda:true,
+    colunas:[['codigo','Código'],['nome','Nome'],['hectares','Área (ha)','n'],['tipo_uso','Uso'],['cultura','Culturas']],
+    campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],['hectares','Área (ha)',{tipo:'number'}],
+      ['tipo_uso','Tipo de uso',{op:['Pastagem','Confinamento','Agricultura','Benfeitorias','Reserva / Área de Preservação Permanente','Reserva Legal','Outros']}],
+      ['cultura','Culturas (forragem)'],['retiro_id','Retiro',{ref:'retiros'}]],
+    busca:['codigo','nome','cultura'], filtro:['tipo_uso','Tipo de uso']},
+  retiros: {tabela:'retiros', titulo:'Retiros', ordem:'nome', porFazenda:true, colunas:[['nome','Nome']], campos:[['nome','Nome',{obr:1}]], busca:['nome']},
+  categorias: {tabela:'categorias_manejo', titulo:'Categorias de manejo', ordem:'codigo', porFazenda:true,
+    colunas:[['codigo','Código'],['nome','Nome'],['categoria_oficial','Categoria oficial'],['sexo','Sexo'],['especie','Espécie']],
+    campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],
+      ['categoria_oficial','Categoria oficial',{obr:1,op:['Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Fêmeas acima 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos acima 36M']}],
+      ['sexo','Sexo',{op:['','M','F']}],['especie','Espécie',{op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}]],
+    busca:['codigo','nome'], filtro:['categoria_oficial','Categoria oficial']},
+  produtos: {tabela:'produtos', titulo:'Produtos', ordem:'nome', porFazenda:true,
+    colunas:[['nome','Nome'],['unidade','Unidade'],['tipo_uso','Tipo de uso'],['ativo','Situação','b']],
+    campos:[['nome','Nome',{obr:1}],['codigo','Código'],['unidade','Unidade de medida',{op:['kg','L','un','t','g','mL','dose','sc']}],
+      ['tipo_uso','Tipo de uso',{op:['Suplementos e Rações','Medicamentos e Vacinas','Combustíveis e Lubrificantes','Adubos e Fertilizantes','Defensivos','Sementes','Peças e Manutenção','Insumo','Outros']}],
+      ['ativo','Ativo',{tipo:'bool'}]],
+    busca:['nome','codigo'], filtro:['tipo_uso','Tipo de uso']},
+  fazendas: {tabela:'fazendas', titulo:'Fazendas', ordem:'nome', porFazenda:false,
+    colunas:[['nome','Nome'],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']],
+    campos:[['nome','Nome',{obr:1}],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']], busca:['nome','municipio']}
+};
+const refCache = {};
+async function carregarRef(t){
+  const {data} = await sb.from(t).select('id,nome').eq('fazenda_id', E.fazenda.id).order('nome');
+  refCache[t] = data || []; return refCache[t];
+}
+
+async function telaCadastro(chave){
+  const C = CAD[chave];
+  let q = sb.from(C.tabela).select('*').order(C.ordem);
+  if (C.porFazenda) q = q.eq('fazenda_id', E.fazenda.id);
+  const {data, error} = await q;
+  if (error) { $('#corpo').innerHTML = `<div class="msg erro">${esc(error.message)}</div>`; return; }
+  const linhas = data || [];
+  for (const [, , o={}] of C.campos) if (o.ref) await carregarRef(o.ref);
+  const podeNovo = chave === 'fazendas' ? E.perfil?.admin : podeEditar();
+  const opsFiltro = C.filtro ? [...new Set(linhas.map(l => l[C.filtro[0]]).filter(Boolean))].sort() : [];
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>${C.titulo}</h2>
+      ${podeNovo ? '<button class="btn" id="novo">+ Novo</button>' : ''}
+      <button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="busca" placeholder="Pesquisar">
+      ${C.filtro ? `<select id="filtro"><option value="">${C.filtro[1]}: todos</option>${opsFiltro.map(o => `<option>${esc(o)}</option>`).join('')}</select>` : ''}</div>
+    <div class="tabela"><table><thead><tr>${C.colunas.map(c => `<th class="${c[2]==='n'?'num':''}">${c[1]}</th>`).join('')}</tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if (podeNovo) $('#novo').onclick = () => formCadastro(chave, null);
+  const filtrar = () => {
+    const b = $('#busca').value.toLowerCase(), f = $('#filtro')?.value || '';
+    return linhas.filter(l => (!b || C.busca.some(k => String(l[k]||'').toLowerCase().includes(b))) && (!f || l[C.filtro[0]] === f));
+  };
+  const celula = (l, c) => c[2]==='n' ? fmtNum(l[c[0]]) : c[2]==='b' ? (l[c[0]] ? 'Ativo' : 'Inativo') : esc(l[c[0]]);
+  const desenhar = () => {
+    const ls = filtrar();
+    $('#tb').innerHTML = ls.length ? ls.map(l => `<tr class="clic" data-id="${l.id}">${C.colunas.map(c => `<td class="${c[2]==='n'?'num':''}">${celula(l,c)}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="${C.colunas.length}" class="vazio">Nada encontrado</td></tr>`;
+    let rod = `${ls.length} de ${linhas.length} registros`;
+    if (chave==='areas') rod += ` · ${fmtNum(ls.reduce((s,a)=>s+Number(a.hectares||0),0))} ha`;
+    $('#rod').textContent = rod;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formCadastro(chave, linhas.find(l => l.id === tr.dataset.id)));
+  };
+  $('#busca').oninput = desenhar; if ($('#filtro')) $('#filtro').onchange = desenhar;
+  $('#csv').onclick = () => baixarCSV(C.titulo, C.colunas.map(c => c[1]), filtrar().map(l => C.colunas.map(c => c[2]==='n' ? fmtNum(l[c[0]]) : c[2]==='b' ? (l[c[0]]?'Ativo':'Inativo') : (l[c[0]] ?? ''))));
+  desenhar();
+}
+
+function campoHTML([k, rot, o={}], v){
+  const val = v ?? '';
+  if (o.tipo === 'bool') return `<label class="chk"><input type="checkbox" id="f_${k}" ${v!==false?'checked':''}> ${rot}</label>`;
+  if (o.ref) return `<label>${rot}</label><select id="f_${k}"><option value="">—</option>${(refCache[o.ref]||[]).map(r => `<option value="${r.id}" ${r.id===v?'selected':''}>${esc(r.nome)}</option>`).join('')}</select>`;
+  if (o.op) { const ops = o.op.includes(val) || val==='' ? o.op : [...o.op, val];
+    return `<label>${rot}${o.obr?' *':''}</label><select id="f_${k}">${ops.map(x => `<option ${x===val?'selected':''}>${esc(x)}</option>`).join('')}</select>`; }
+  return `<label>${rot}${o.obr?' *':''}</label><input id="f_${k}" type="${o.tipo||'text'}" ${o.tipo==='number'?'step="0.01" inputmode="decimal"':''} value="${esc(val)}">`;
+}
+
+function formCadastro(chave, reg){
+  const C = CAD[chave];
+  const pode = chave === 'fazendas' ? ehAdmin() : podeEditar();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${reg ? 'Editar' : 'Novo'} – ${C.titulo}</h3>
+    ${C.campos.map(c => campoHTML(c, reg?.[c[0]])).join('')}
+    ${reg?.criado_em ? `<div class="rodape">Cadastrado em ${fmtData(reg.criado_em)}${reg.agrohub_id ? ' · veio do AgroHUB' : ''}</div>` : ''}
+    <div class="msg erro" id="ferro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="fcan">Cancelar</button>${pode ? '<button class="btn" id="fsal">Salvar</button>' : ''}</div>
+    ${reg && ehAdmin() && chave !== 'fazendas' ? '<div class="acoes"><button class="btn perigo" id="fexc">Excluir</button></div>' : ''}</div>`;
+  document.body.appendChild(m);
+  if (!pode) m.querySelectorAll('input,select').forEach(i => i.disabled = true);
+  m.querySelector('#fcan').onclick = () => m.remove();
+  m.onclick = e => { if (e.target === m) m.remove(); };
+  const erro = t => { const d = m.querySelector('#ferro'); d.textContent = t; d.style.display = 'block'; };
+  if (pode) m.querySelector('#fsal').onclick = async () => {
+    const obj = {};
+    for (const [k, rot, o={}] of C.campos) {
+      const el = m.querySelector('#f_'+k);
+      let v = o.tipo === 'bool' ? el.checked : el.value.trim();
+      if (o.tipo === 'number') v = v === '' ? 0 : Number(v.replace(',', '.'));
+      if (o.ref || (o.op && v === '')) v = v || null;
+      if (o.obr && !v) return erro(`Preencha: ${rot}`);
+      obj[k] = v;
+    }
+    if (C.porFazenda) obj.fazenda_id = E.fazenda.id;
+    const r = reg ? await sb.from(C.tabela).update(obj).eq('id', reg.id) : await sb.from(C.tabela).insert(obj);
+    if (r.error) return erro(/duplicate/.test(r.error.message) ? 'Já existe um cadastro com esse código/nome.' : r.error.message);
+    m.remove(); aviso('Salvo');
+    if (chave === 'fazendas') { const {data} = await sb.from('fazendas').select('*').eq('ativo',true).order('nome'); E.fazendas = data||[]; if(!E.fazenda) E.fazenda = E.fazendas[0]; await carregarPapel(); }
+    render();
+  };
+  const exc = m.querySelector('#fexc');
+  if (exc) exc.onclick = async () => {
+    if (!confirm('Excluir este cadastro? Não dá para desfazer.')) return;
+    const r = await sb.from(C.tabela).delete().eq('id', reg.id);
+    if (r.error) return erro(/foreign key/.test(r.error.message) ? 'Não dá para excluir: este cadastro está sendo usado.' : r.error.message);
+    m.remove(); aviso('Excluído'); render();
+  };
+}
+
+function baixarCSV(nome, cab, linhas){
+  const cel = v => { const s = String(v ?? ''); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+  const txt = '﻿' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([txt], {type:'text/csv;charset=utf-8'}));
+  a.download = `${nome} - ${E.fazenda?.nome || ''} - ${fmtData(new Date()).replace(/\//g,'-')}.csv`;
+  a.click();
+}
+
+// ---------- Módulos ----------
+async function telaModulos(){
+  const fid = E.fazenda.id;
+  const [{data:mods}, {data:areas}, {data:ma}] = await Promise.all([
+    sb.from('modulos').select('*').eq('fazenda_id', fid).order('nome'),
+    sb.from('areas').select('id,codigo,nome,hectares').eq('fazenda_id', fid).order('codigo'),
+    sb.from('modulo_areas').select('modulo_id,area_id')]);
+  const porId = Object.fromEntries((areas||[]).map(a => [a.id, a]));
+  const areasDe = id => (ma||[]).filter(x => x.modulo_id === id).map(x => porId[x.area_id]).filter(Boolean);
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>Módulos</h2>${podeEditar() ? '<button class="btn" id="novo">+ Novo</button>' : ''}</div>
+    <div class="filtros"><input id="busca" placeholder="Pesquisar módulo ou área"></div>
+    <div class="tabela"><table><thead><tr><th>Nome</th><th>Áreas</th><th class="num">Área (ha)</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  const desenhar = () => {
+    const b = $('#busca').value.toLowerCase();
+    const ls = (mods||[]).filter(m => !b || m.nome.toLowerCase().includes(b) || areasDe(m.id).some(a => a.codigo.toLowerCase().includes(b)));
+    $('#tb').innerHTML = ls.map(m => { const as = areasDe(m.id);
+      return `<tr class="clic" data-id="${m.id}"><td><span class="cor" style="background:${esc(m.cor||'#999')}"></span>${esc(m.nome)}</td>
+        <td style="white-space:normal">${as.map(a => esc(a.codigo)).join(', ')}</td><td class="num">${fmtNum(as.reduce((s,a)=>s+Number(a.hectares||0),0))}</td></tr>`; }).join('')
+      || '<tr><td colspan="3" class="vazio">Nenhum módulo</td></tr>';
+    $('#rod').textContent = `${ls.length} módulos`;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formModulo(mods.find(m => m.id === tr.dataset.id)));
+  };
+  $('#busca').oninput = desenhar;
+  if ($('#novo')) $('#novo').onclick = () => formModulo(null);
+  desenhar();
+
+  function formModulo(mod){
+    const sel = new Set(mod ? areasDe(mod.id).map(a => a.id) : []);
+    const m = document.createElement('div'); m.className = 'modal';
+    m.innerHTML = `<div class="caixa"><h3>${mod ? 'Editar' : 'Novo'} módulo</h3>
+      <label>Nome *</label><input id="mnome" value="${esc(mod?.nome||'')}">
+      <label>Cor</label><input id="mcor" type="color" value="${esc(mod?.cor||'#4c8a2b')}" style="height:44px">
+      <label>Áreas do módulo</label><input id="mbusca" placeholder="Filtrar áreas" style="margin-bottom:6px">
+      <div class="lista-areas">${(areas||[]).map(a => `<label class="chk" data-c="${esc(a.codigo.toLowerCase())}"><input type="checkbox" value="${a.id}" ${sel.has(a.id)?'checked':''}> ${esc(a.codigo)} <span class="pill">${fmtNum(a.hectares)} ha</span></label>`).join('')}</div>
+      <div class="msg erro" id="merro" style="display:none"></div>
+      <div class="acoes"><button class="btn sec" id="mcan">Cancelar</button>${podeEditar() ? '<button class="btn" id="msal">Salvar</button>' : ''}</div>
+      ${mod && ehAdmin() ? '<div class="acoes"><button class="btn perigo" id="mexc">Excluir</button></div>' : ''}</div>`;
+    document.body.appendChild(m);
+    m.querySelector('#mbusca').oninput = e => m.querySelectorAll('.lista-areas .chk').forEach(l => l.style.display = l.dataset.c.includes(e.target.value.toLowerCase()) ? '' : 'none');
+    m.querySelector('#mcan').onclick = () => m.remove();
+    const salvar = m.querySelector('#msal');
+    if (salvar) salvar.onclick = async () => {
+      const nome = m.querySelector('#mnome').value.trim();
+      if (!nome) { const d = m.querySelector('#merro'); d.textContent = 'Preencha o nome'; d.style.display='block'; return; }
+      const obj = {nome, cor:m.querySelector('#mcor').value, fazenda_id:fid};
+      const r = mod ? await sb.from('modulos').update(obj).eq('id', mod.id).select().single() : await sb.from('modulos').insert(obj).select().single();
+      if (r.error) { const d = m.querySelector('#merro'); d.textContent = r.error.message; d.style.display='block'; return; }
+      const id = r.data.id;
+      await sb.from('modulo_areas').delete().eq('modulo_id', id);
+      const ids = [...m.querySelectorAll('.lista-areas input:checked')].map(i => ({modulo_id:id, area_id:i.value}));
+      if (ids.length) await sb.from('modulo_areas').insert(ids);
+      m.remove(); aviso('Salvo'); telaModulos();
+    };
+    const exc = m.querySelector('#mexc');
+    if (exc) exc.onclick = async () => { if (!confirm('Excluir este módulo?')) return; await sb.from('modulos').delete().eq('id', mod.id); m.remove(); telaModulos(); };
+  }
+}
+
+// ---------- Mapa ----------
+async function telaMapa(){
+  const fid = E.fazenda.id;
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
+    <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo código"></div><div id="mapa"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  const [{data:areas}, {data:mods}, {data:ma}] = await Promise.all([
+    sb.from('areas').select('*').eq('fazenda_id', fid),
+    sb.from('modulos').select('id,nome').eq('fazenda_id', fid),
+    sb.from('modulo_areas').select('modulo_id,area_id')]);
+  const modDe = {}; (ma||[]).forEach(x => { const mm = (mods||[]).find(m => m.id === x.modulo_id); if (mm) modDe[x.area_id] = mm.nome; });
+  const mapa = L.map('mapa', {zoomControl:true});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mapa);
+  const grupo = L.featureGroup().addTo(mapa); const camadas = {};
+  (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).forEach(a => {
+    const p = L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:a.cor || '#a7c232', fillOpacity:.55}).addTo(grupo);
+    p.bindTooltip(esc(a.codigo), {permanent:true, direction:'center', className:'rotulo'});
+    p.bindPopup(`<b>${esc(a.codigo)}</b>${a.nome!==a.codigo?'<br>'+esc(a.nome):''}<br>${fmtNum(a.hectares)} ha · ${esc(a.tipo_uso)}${a.cultura?'<br>Forragem: '+esc(a.cultura):''}${modDe[a.id]?'<br>Módulo: '+esc(modDe[a.id]):''}`);
+    camadas[a.codigo.toLowerCase()] = p;
+  });
+  if (grupo.getLayers().length) mapa.fitBounds(grupo.getBounds(), {padding:[10,10]}); else mapa.setView([-5.5,-48.5], 12);
+  $('#mbusca').onchange = e => { const p = camadas[e.target.value.trim().toLowerCase()]; if (p) { mapa.fitBounds(p.getBounds()); p.openPopup(); } else aviso('Área não encontrada'); };
+}
+
+// ---------- Usuários ----------
+async function telaUsuarios(){
+  const fid = E.fazenda.id;
+  const {data:mem} = await sb.from('fazenda_usuarios').select('usuario_id,papel').eq('fazenda_id', fid);
+  const ids = (mem||[]).map(m => m.usuario_id);
+  const {data:perfis} = ids.length ? await sb.from('perfis').select('id,nome,email').in('id', ids) : {data:[]};
+  const nomes = {admin:'Administrador', gerente:'Gerente', operador:'Operador (lança)', consulta:'Só consulta'};
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>Usuários – ${esc(E.fazenda.nome)}</h2></div>
+    <div class="tabela"><table><thead><tr><th>Nome</th><th>Email</th><th>Acesso</th><th></th></tr></thead><tbody>
+    ${(mem||[]).map(m => { const p = (perfis||[]).find(x => x.id === m.usuario_id) || {};
+      return `<tr><td>${esc(p.nome)}</td><td>${esc(p.email)}</td><td><select data-u="${m.usuario_id}" class="papel">${Object.entries(nomes).map(([k,v]) => `<option value="${k}" ${k===m.papel?'selected':''}>${v}</option>`).join('')}</select></td>
+      <td>${m.usuario_id !== E.usuario.id ? `<button class="btn perigo peq" data-r="${m.usuario_id}">Remover</button>` : ''}</td></tr>`; }).join('') || '<tr><td colspan="4" class="vazio">Só administradores gerais têm acesso</td></tr>'}
+    </tbody></table></div>
+    <div class="secao">Liberar acesso</div>
+    <div class="tabela" style="padding:12px">
+      <div class="rodape" style="margin-top:0">A pessoa cria a conta no app primeiro. Depois você libera pelo email dela.</div>
+      <label>Email</label><input id="uemail" type="email">
+      <label>Acesso</label><select id="upapel">${Object.entries(nomes).map(([k,v]) => `<option value="${k}" ${k==='operador'?'selected':''}>${v}</option>`).join('')}</select>
+      <label class="chk"><input type="checkbox" id="utodas"> Liberar em todas as fazendas</label>
+      <div class="acoes"><button class="btn" id="uadd">Liberar acesso</button></div><div id="umsg"></div></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  document.querySelectorAll('.papel').forEach(s => s.onchange = async () => {
+    const r = await sb.from('fazenda_usuarios').update({papel:s.value}).eq('fazenda_id', fid).eq('usuario_id', s.dataset.u);
+    aviso(r.error ? r.error.message : 'Acesso alterado');
+  });
+  document.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => {
+    if (!confirm('Remover o acesso desta pessoa nesta fazenda?')) return;
+    await sb.from('fazenda_usuarios').delete().eq('fazenda_id', fid).eq('usuario_id', b.dataset.r); telaUsuarios();
+  });
+  $('#uadd').onclick = async () => {
+    const email = $('#uemail').value.trim(), papel = $('#upapel').value;
+    const alvo = $('#utodas').checked ? E.fazendas : [E.fazenda];
+    let msg = '';
+    for (const f of alvo) { const r = await sb.rpc('adicionar_usuario_fazenda', {f:f.id, e:email, p:papel}); msg = r.error ? r.error.message : r.data; if (msg !== 'ok') break; }
+    if (msg === 'ok') { aviso('Acesso liberado'); telaUsuarios(); } else $('#umsg').innerHTML = `<div class="msg erro">${esc(msg)}</div>`;
+  };
+}
+
+sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' && !E.usuario) carregarUsuario(); if (ev === 'PASSWORD_RECOVERY') novaSenha(); });
+async function novaSenha(){
+  const s = prompt('Digite a nova senha (mínimo 6 caracteres):');
+  if (s) { const r = await sb.auth.updateUser({password:s}); alert(r.error ? traduzErro(r.error.message) : 'Senha alterada.'); }
+}
+carregarUsuario();
+</script>
+</body>
+</html>
