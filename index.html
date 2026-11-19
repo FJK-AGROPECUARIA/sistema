@@ -459,7 +459,7 @@ async function telaCadastro(chave){
     const com = linhas.filter(a => Array.isArray(a.geometria) && a.geometria.length > 2);
     const mp = L.map('cad_mapa');
     if (com.length) mp.fitBounds(L.latLngBounds(com.flatMap(a => a.geometria)), {padding:[10,10]}); else mp.setView([-5.5,-48.5], 12);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mp);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:17, attribution:'Esri'}).addTo(mp);
     const polis = {};
     com.forEach(a => { const p = noCentro(L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:a.cor || '#a7c232', fillOpacity:.45}), a.geometria).addTo(mp);
       p.bindTooltip(esc(a.nome || a.codigo), {permanent:true, direction:'center', className:'rotulo'}); p.on('click', () => formCadastro('areas', a)); polis[a.id] = p; });
@@ -624,7 +624,7 @@ async function editorArea(box, reg, aoMudar){
   const mapa = L.map(q('#ed_mapa'), {zoomControl:true, doubleClickZoom:false});
   const g0 = Array.isArray(reg?.geometria) ? reg.geometria.filter(p => isFinite(p[0]) && isFinite(p[1])) : [];
   if (g0.length > 2) mapa.fitBounds(L.latLngBounds(g0), {padding:[30,30]}); else mapa.setView([-5.5,-48.5], 12);
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:19, attribution:'Esri'}).addTo(mapa);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:17, attribution:'Esri'}).addTo(mapa);
   // outras áreas da fazenda, só de referência
   const {data:outras} = await sb.from('areas').select('id,codigo,geometria').eq('fazenda_id', E.fazenda.id);
   const ref = L.featureGroup().addTo(mapa);
@@ -803,7 +803,7 @@ async function telaModulos(){
     const mp = L.map(m.querySelector('#mmapa'));
     { const todos = (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).flatMap(a => a.geometria);
       if (todos.length) mp.fitBounds(L.latLngBounds(todos), {padding:[10,10]}); else mp.setView([-5.5,-48.5], 12); }
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mp);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:17, attribution:'Esri'}).addTo(mp);
     const grp = L.featureGroup().addTo(mp), polis = {};
     const chk = id => m.querySelector(`.lista-areas input[value="${id}"]`);
     const estilo = id => { const cor = m.querySelector('#mcor').value; const dentro = chk(id)?.checked;
@@ -871,7 +871,7 @@ async function telaMapa(){
   const totCab = lotes.reduce((s,l) => s + l.quantidade, 0);
   $('#mbusca').insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha</div>`);
   const mapa = L.map('mapa', {zoomControl:true});
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mapa);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:17, attribution:'Esri'}).addTo(mapa);
   const grupo = L.featureGroup().addTo(mapa); const camadas = {};
   (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).forEach(a => {
     const ls = porArea[a.id] || []; const cab = ls.reduce((s,l) => s + l.quantidade, 0);
