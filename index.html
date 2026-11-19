@@ -1208,13 +1208,13 @@ async function telaFluxo(){
     const acum = []; res.reduce((s,v,i) => (acum[i] = s + v), 0);
     const tot = a => a.reduce((s,v) => s + v, 0);
     const cel = v => `<td class="num" style="color:${v<0?'var(--vermelho)':''}">${v ? fmtNum(v,0) : ''}</td>`;
-    const row = (nome, a, est='') => `<tr style="${est}"><td>${nome}</td>${a.map(cel).join('')}${cel(tot(a))}</tr>`;
+    const row = (nome, a, est='', fim) => `<tr style="${est}"><td>${nome}</td>${a.map(cel).join('')}${cel(fim ?? tot(a))}</tr>`;
     const bloco = nat => ks.filter(k => k.startsWith(nat)).map(k => row('&nbsp;&nbsp;' + esc(ord[k][1]), lin[k])).join('');
     $('#tf').innerHTML = `<thead><tr><th>${ano}</th>${MES.map(m => `<th class="num">${m}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
       ${row('<b>Entradas</b>', ent, 'background:#f2f8ec')}${bloco('Entradas')}
       ${row('<b>Saídas</b>', sai, 'background:#fdf1ef')}${bloco('Saídas')}
       ${row('<b>Resultado do mês</b>', res, 'background:#eef2e8;font-weight:700')}
-      ${row('<b>Resultado acumulado</b>', acum, 'background:#eef2e8')}</tbody>`;
+      ${row('<b>Resultado acumulado</b>', acum, 'background:#eef2e8', acum[11])}</tbody>`;
     csv = [['Entradas', ...ent, tot(ent)], ...ks.filter(k => k.startsWith('Entradas')).map(k => ['  '+ord[k][1], ...lin[k], tot(lin[k])]),
       ['Saídas', ...sai, tot(sai)], ...ks.filter(k => k.startsWith('Saídas')).map(k => ['  '+ord[k][1], ...lin[k], tot(lin[k])]),
       ['Resultado do mês', ...res, tot(res)]].map(r => r.map((v,i) => i ? fmtNum(v) : v));
