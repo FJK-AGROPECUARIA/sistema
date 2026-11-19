@@ -161,7 +161,7 @@ function render(){
     lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico,
     animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual,
     finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
-    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
+    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -180,6 +180,7 @@ async function telaInicio(){
   const nAni = (await sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', fid).eq('ativo', true)).count ?? 0;
   const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('tipo', t).eq('status', 'Em aberto').lt('vencimento', hojeISO())).count ?? 0;
   const [venP, venR] = await Promise.all([venc('Pagar'), venc('Receber')]);
+  const nNovas = (await sb.from('notas_fiscais').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('status', 'Nova')).count ?? 0;
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   $('#corpo').innerHTML = `
     <div class="secao">Manejo do rebanho</div>
@@ -213,6 +214,12 @@ async function telaInicio(){
       ${q('finfluxo','📈','Fluxo de caixa','Entradas e saídas por mês')}
       ${q('finplano','🧾','Plano de contas','Contas de receita e despesa')}
       ${q('fincentros','🎯','Centros de custo','Pecuária, administrativo...')}
+    </div>
+    <div class="secao">Contábil</div>
+    <div class="grade">
+      ${q('notas','📨','Notas fiscais recebidas', nNovas ? `<span style="color:var(--vermelho)">${nNovas} novas</span>` : 'Notas emitidas contra os titulares')}
+      ${q('livrocaixa','📒','Livro caixa do produtor','Receitas e despesas por produtor')}
+      ${q('dre','📑','DRE','Resultado do exercício')}
     </div>
     <div class="secao">Cadastros</div>
     <div class="grade">
@@ -1032,7 +1039,7 @@ function formLancFin(reg){
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Emissão</label><input id="l_emi" type="date" value="${reg.data_emissao || (novo ? hojeISO() : '')}"></div>
       <div style="flex:1"><label>${novo ? '1º vencimento' : 'Vencimento'} *</label><input id="l_ven" type="date" value="${reg.vencimento || hojeISO()}"></div></div>
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Valor${novo ? ' de cada parcela' : ''} (R$) *</label><input id="l_val" inputmode="decimal" value="${reg.valor != null ? String(reg.valor).replace('.',',') : ''}"></div>
-      ${novo ? '<div style="flex:1"><label>Parcelas</label><input id="l_npar" type="number" min="1" max="120" value="1"></div>' : `<div style="flex:1"><label>Parcela</label><input id="l_par" value="${esc(reg.parcela)}"></div>`}</div>
+      ${novo ? '<div style="flex:1"><label>Parcelas</label><input id="l_npar" type="number" min="1" max="120" value="${reg._parcelas||1}"></div>' : `<div style="flex:1"><label>Parcela</label><input id="l_par" value="${esc(reg.parcela)}"></div>`}</div>
     <label>Plano de contas *</label>${sel('l_pl', optPl, reg.plano_conta, '—')}
     <label>Centro de custo *</label>${sel('l_cc', optCc, reg.centro_custo, '—')}
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Conta</label><select id="l_conta"><option value="">—</option>${FIN.contas.filter(c => c.ativo || c.id === reg.conta_id).map(c => `<option value="${c.id}" ${c.id===reg.conta_id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
@@ -1080,7 +1087,8 @@ function formLancFin(reg){
         linhas.push({...o, fazenda_id:FIN.faz, vencimento:iso, parcela:`${i+1}/${n}`,
           ...(i > 0 ? {status:'Em aberto', data_pagamento:null, valor_pago:null} : {})});
       }
-      r = await sb.from('lancamentos_financeiros').insert(linhas);
+      r = await sb.from('lancamentos_financeiros').insert(linhas).select('id');
+      if (!r.error && reg._nota) await sb.from('notas_fiscais').update({status:'Lançada', lancamento_id:r.data?.[0]?.id || null}).eq('id', reg._nota);
     } else {
       o.parcela = q('#l_par').value.trim() || null; o.atualizado_em = new Date().toISOString();
       r = await sb.from('lancamentos_financeiros').update(o).eq('id', reg.id);
@@ -1566,6 +1574,193 @@ async function telaHistRep(){
   $('#csv').onclick = () => baixarCSV('Histórico reprodutivo', ['Data','Fêmea','Operação','Cobertura','Reprodutor','Resultado / parição','Cria','Observação'],
     rows.map(e => [fD(e.data), e.femea_brinco, e.operacao, e.tipo_cobertura, e.reprodutor, e.diagnostico===true?'Prenhe':e.diagnostico===false?'Vazia':e.tipo_paricao, e.cria_brinco, e.observacao]));
   buscar();
+}
+
+// ---------- Contábil ----------
+// Estrutura da DRE gerencial pelo código do grupo do plano de contas
+const DRE_LINHAS = [
+  ['rb', 'Receita bruta', c => [100,103,105,108].includes(c)],
+  ['ded', '(-) Deduções e impostos sobre vendas', c => [130,135].includes(c)],
+  ['cv', '(-) Custos variáveis (nutrição, sanidade, reprodução...)', c => (c >= 300 && c < 350) || [230,247].includes(c)],
+  ['ca', '(-) Compras de animais', c => c >= 350 && c < 360],
+  ['cf', '(-) Custos fixos (pessoal, manutenção, energia...)', c => [200,210,220,240,245,246,248,249,251,270].includes(c)],
+  ['adm', '(-) Despesas administrativas', c => [363,364,365,368,400].includes(c)],
+  ['vend', '(-) Despesas com vendas', c => c === 370],
+  ['rfin', '(+) Receitas financeiras', c => c === 120],
+  ['dfin', '(-) Despesas financeiras', c => c === 380],
+  ['rno', '(+) Receitas não operacionais (venda de ativos)', c => c === 140],
+  ['trib', '(-) Tributos sobre o resultado', c => c === 390],
+  ['fora', 'Fora do resultado: investimentos, capital, financiamentos e movimentações', c => c >= 410]];
+const linhaDRE = txt => { const p = grupoDoPlano(txt); const c = parseInt(p?.grupo || txt) || 0; return (DRE_LINHAS.find(l => l[2](c)) || ['outros'])[0]; };
+
+async function telaDRE(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin();
+  const anos = [...new Set(FIN.lancs.map(l => (l.data_pagamento || l.vencimento).slice(0,4)))].sort();
+  const MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>DRE – resultado do exercício</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="da">${anos.map(a => `<option ${a===hojeISO().slice(0,4)?'selected':''}>${a}</option>`).join('')}</select>
+      <select id="dreg"><option value="caixa">Regime de caixa (pago e recebido)</option><option value="comp">Competência (pelo vencimento)</option></select>
+      <select id="dcc"><option value="">Centro de custo: todos</option>${FIN.centros.map(c => `<option>${esc(c.nome)}</option>`).join('')}</select>
+      <select id="dper"><option value="ano">Total do ano</option><option value="mes">Mês a mês</option></select></div>
+    <div class="tabela"><table id="td"></table></div>
+    <div class="rodape">DRE gerencial montada pelos grupos do plano de contas. Não inclui variação do valor do rebanho. Para a declaração oficial, confira com o contador.</div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let csv = [], cab = [];
+  const desenhar = () => {
+    const ano = $('#da').value, caixa = $('#dreg').value === 'caixa', cc = $('#dcc').value, mensal = $('#dper').value === 'mes';
+    const L = {}; const det = {};
+    FIN.lancs.forEach(l => {
+      if (l.status === 'Cancelada') return;
+      if (caixa && l.status !== 'Efetivada') return;
+      if (cc && !String(l.centro_custo||'').split(', ').includes(cc)) return;
+      const d = caixa ? (l.data_pagamento || l.vencimento) : l.vencimento;
+      if (!d || d.slice(0,4) !== ano) return;
+      const v = (caixa ? Number(l.valor_pago ?? l.valor) : Number(l.valor)) * (l.tipo === 'Receber' ? 1 : -1);
+      const k = linhaDRE(l.plano_conta), mi = mensal ? +d.slice(5,7) - 1 : 0;
+      (L[k] = L[k] || Array(12).fill(0))[mi] += v;
+      const g = grupoDoPlano(l.plano_conta)?.grupo || l.plano_conta || 'Sem plano';
+      det[k] = det[k] || {}; (det[k][g] = det[k][g] || Array(12).fill(0))[mi] += v;
+    });
+    const n = mensal ? 12 : 1, z = () => Array(n).fill(0), get = k => (L[k] || Array(12).fill(0)).slice(0, n);
+    const soma = (...ks) => z().map((_,i) => ks.reduce((s,k) => s + get(k)[i], 0));
+    const rl = soma('rb','ded'), ro = soma('rb','ded','cv','ca','cf','adm','vend'), rliq = soma('rb','ded','cv','ca','cf','adm','vend','rfin','dfin','rno','trib','outros');
+    const rb = get('rb');
+    const cel = (v, i) => `<td class="num" style="color:${v<0?'var(--vermelho)':''}">${v ? fmtNum(v,0) : ''}</td>`;
+    const pct = a => mensal ? '' : `<td class="num">${rb[0] ? fmtNum(a[0]/rb[0]*100,1)+'%' : ''}</td>`;
+    const linha = (nome, a, est='') => `<tr style="${est}"><td style="white-space:normal">${nome}</td>${a.map(cel).join('')}${pct(a)}</tr>`;
+    const sub = k => Object.entries(det[k]||{}).sort((a,b) => a[0].localeCompare(b[0],'pt-BR',{numeric:true})).map(([g,a]) => linha('&nbsp;&nbsp;&nbsp;' + esc(g), a.slice(0,n), 'color:var(--cinza);font-size:13px')).join('');
+    const bloco = k => { const l = DRE_LINHAS.find(x => x[0] === k); return linha(l[1], get(k)) + sub(k); };
+    const tot = (nome, a) => linha(`<b>${nome}</b>`, a, 'background:#eef2e8;font-weight:700');
+    cab = [ano, ...(mensal ? MES : ['Total']), ...(mensal ? [] : ['% receita'])];
+    $('#td').innerHTML = `<thead><tr>${cab.map((c,i) => `<th class="${i?'num':''}">${c}</th>`).join('')}</tr></thead><tbody>
+      ${bloco('rb')}${bloco('ded')}${tot('= Receita líquida', rl)}
+      ${bloco('cv')}${bloco('ca')}${bloco('cf')}${bloco('adm')}${bloco('vend')}${tot('= Resultado operacional', ro)}
+      ${bloco('rfin')}${bloco('dfin')}${bloco('rno')}${bloco('trib')}${L.outros ? linha('Outros (sem grupo reconhecido)', get('outros')) + sub('outros') : ''}
+      ${tot('= Resultado líquido do período', rliq)}
+      <tr><td colspan="${cab.length}" style="padding-top:16px"></td></tr>${bloco('fora')}</tbody>`;
+    const lin = (nome, a) => [nome, ...a.map(v => fmtNum(v)), ...(mensal ? [] : [rb[0] ? fmtNum(a[0]/rb[0]*100,1) : ''])];
+    csv = [...['rb','ded'].map(k => lin(DRE_LINHAS.find(x=>x[0]===k)[1], get(k))), lin('= Receita líquida', rl),
+      ...['cv','ca','cf','adm','vend'].map(k => lin(DRE_LINHAS.find(x=>x[0]===k)[1], get(k))), lin('= Resultado operacional', ro),
+      ...['rfin','dfin','rno','trib'].map(k => lin(DRE_LINHAS.find(x=>x[0]===k)[1], get(k))), lin('= Resultado líquido do período', rliq), lin(DRE_LINHAS.at(-1)[1], get('fora'))];
+  };
+  ['da','dreg','dcc','dper'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('DRE ' + $('#da').value, cab, csv);
+  desenhar();
+}
+
+async function telaLivroCaixa(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin();
+  const socios = [...new Set(FIN.lancs.map(l => l.socio).filter(Boolean))].sort();
+  const anos = [...new Set(FIN.lancs.filter(l => l.data_pagamento).map(l => l.data_pagamento.slice(0,4)))].sort();
+  const MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Livro caixa do produtor rural</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="la">${anos.map(a => `<option ${a===hojeISO().slice(0,4)?'selected':''}>${a}</option>`).join('')}</select>
+      <select id="ls"><option value="">Produtor: todos</option>${socios.map(s => `<option>${esc(s)}</option>`).join('')}</select>
+      <select id="lv"><option value="mes">Resumo por mês</option><option value="lanc">Lançamento a lançamento</option></select>
+      <label class="chk" style="margin:0;flex:0 0 auto"><input type="checkbox" id="lfora"> Incluir movimentações fora da atividade</label></div>
+    <div class="grade" id="ltot" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:10px"></div>
+    <div class="tabela"><table id="tl"></table></div>
+    <div class="rodape">Entram só os valores efetivamente pagos e recebidos (regime de caixa), pela data do pagamento. Investimentos em máquinas e benfeitorias entram como despesa da atividade; aportes, empréstimos e movimentações pessoais ficam fora, a não ser que você marque a opção. Confira com o contador antes de entregar o LCDPR.</div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let csv = [], cab = [];
+  const desenhar = () => {
+    const ano = $('#la').value, so = $('#ls').value, lanc = $('#lv').value === 'lanc', fora = $('#lfora').checked;
+    const ls = FIN.lancs.filter(l => l.status === 'Efetivada' && l.data_pagamento?.slice(0,4) === ano && (!so || l.socio === so)).filter(l => {
+      const c = parseInt(grupoDoPlano(l.plano_conta)?.grupo || l.plano_conta) || 0; return fora || c < 420; })
+      .map(l => ({l, ent: l.tipo === 'Receber' ? Number(l.valor_pago ?? l.valor) : 0, sai: l.tipo === 'Pagar' ? Number(l.valor_pago ?? l.valor) : 0}))
+      .sort((a,b) => a.l.data_pagamento < b.l.data_pagamento ? -1 : 1);
+    const E_ = ls.reduce((s,x) => s + x.ent, 0), S_ = ls.reduce((s,x) => s + x.sai, 0);
+    const card = (t, v, cor) => `<div class="quad" style="min-height:64px;padding:8px;cursor:default"><span>${t}</span><b style="color:${cor||'inherit'}">${moeda(v)}</b></div>`;
+    $('#ltot').innerHTML = card('Receitas', E_, 'var(--verde)') + card('Despesas', S_, 'var(--vermelho)') + card('Resultado', E_ - S_, E_-S_<0?'var(--vermelho)':'var(--verde)') + `<div class="quad" style="min-height:64px;padding:8px;cursor:default"><span>Lançamentos</span><b>${fmtNum(ls.length,0)}</b></div>`;
+    if (lanc) {
+      let saldo = 0;
+      cab = ['Data','Produtor','Histórico','Documento','Plano de contas','Conta','Entrada','Saída','Saldo'];
+      const rows = ls.map(x => { saldo += x.ent - x.sai; return [fD(x.l.data_pagamento), x.l.socio||'', [x.l.pessoa, x.l.observacao].filter(Boolean).join(' – '), [x.l.tipo_documento, x.l.documento].filter(Boolean).join(' '), x.l.plano_conta||'', nomeConta(x.l.conta_id), x.ent, x.sai, saldo]; });
+      $('#tl').innerHTML = `<thead><tr>${cab.map((c,i) => `<th class="${i>5?'num':''}">${c}</th>`).join('')}</tr></thead><tbody>` +
+        rows.slice(0, 1500).map(r => `<tr>${r.map((c,i) => i > 5 ? `<td class="num">${c ? fmtNum(c) : ''}</td>` : `<td style="${i===2?'white-space:normal;min-width:220px':''}">${esc(c)}</td>`).join('')}</tr>`).join('') + '</tbody>';
+      csv = rows.map(r => r.map((c,i) => i > 5 ? fmtNum(c) : c));
+    } else {
+      cab = ['Mês','Receitas','Despesas','Resultado do mês','Resultado acumulado'];
+      let ac = 0;
+      const rows = MES.map((m,i) => { const mm = String(i+1).padStart(2,'0'); const x = ls.filter(y => y.l.data_pagamento.slice(5,7) === mm);
+        const e = x.reduce((s,y) => s + y.ent, 0), s = x.reduce((s2,y) => s2 + y.sai, 0); ac += e - s; return [m, e, s, e - s, ac]; });
+      $('#tl').innerHTML = `<thead><tr>${cab.map((c,i) => `<th class="${i?'num':''}">${c}</th>`).join('')}</tr></thead><tbody>` +
+        rows.map(r => `<tr>${r.map((c,i) => i ? `<td class="num" style="color:${c<0?'var(--vermelho)':''}">${c ? fmtNum(c) : ''}</td>` : `<td>${c}</td>`).join('')}</tr>`).join('') +
+        `<tr style="background:#eef2e8;font-weight:700"><td>Total</td><td class="num">${fmtNum(E_)}</td><td class="num">${fmtNum(S_)}</td><td class="num">${fmtNum(E_-S_)}</td><td></td></tr></tbody>`;
+      csv = rows.map(r => r.map((c,i) => i ? fmtNum(c) : c));
+    }
+  };
+  ['la','ls','lv','lfora'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Livro caixa ' + $('#la').value + ($('#ls').value ? ' ' + $('#ls').value : ''), cab, csv);
+  desenhar();
+}
+
+async function telaNotas(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const fz = finFaz();
+  const notas = await todas(() => sb.from('notas_fiscais').select('id,chave,numero,serie,data_emissao,emitente_nome,emitente_doc,destinatario_nome,natureza_operacao,valor_total,situacao_sefaz,manifestacao,status,completa,lancamento_id,observacao').eq('fazenda_id', fz).order('data_emissao', {ascending:false}));
+  const dests = [...new Set(notas.map(n => n.destinatario_nome).filter(Boolean))].sort();
+  const ini = new Date(Date.now() - 60*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Notas fiscais recebidas</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="nde" type="date" value="${ini}"><input id="nate" type="date" value="${hojeISO()}">
+      <select id="nst"><option value="">Situação: todas</option><option>Nova</option><option>Lançada</option><option>Ignorada</option></select>
+      <select id="ndest"><option value="">Destinatário: todos</option>${dests.map(d => `<option>${esc(d)}</option>`).join('')}</select>
+      <input id="nbus" placeholder="Emitente, número ou chave"></div>
+    <div class="tabela"><table><thead><tr><th>Emissão</th><th>Número</th><th>Emitente</th><th>Destinatário</th><th>Natureza</th><th class="num">Valor</th><th>SEFAZ</th><th>Situação</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let ls = [];
+  const desenhar = () => {
+    const de = $('#nde').value || '0000', ate = ($('#nate').value || '9999') + 'T23:59:59', st = $('#nst').value, ds = $('#ndest').value, b = $('#nbus').value.toLowerCase();
+    ls = notas.filter(n => { const d = (n.data_emissao||'').slice(0,19); return d >= de && d <= ate && (!st || n.status === st) && (!ds || n.destinatario_nome === ds)
+      && (!b || [n.emitente_nome, n.numero, n.chave].some(x => String(x||'').toLowerCase().includes(b))); });
+    const cor = {Nova:'#fff4d6', 'Lançada':'#e7f3df', Ignorada:'#eee'};
+    $('#tb').innerHTML = ls.slice(0, 800).map((n,i) => `<tr class="clic" data-i="${i}"><td>${fmtData(n.data_emissao)}</td><td>${esc(n.numero||'')}</td><td style="white-space:normal;min-width:180px">${esc(n.emitente_nome)}</td>
+      <td style="white-space:normal">${esc(n.destinatario_nome)}</td><td style="white-space:normal">${esc(n.natureza_operacao||'')}</td><td class="num">${fmtNum(n.valor_total)}</td><td>${esc(n.situacao_sefaz||'')}</td><td><span class="pill" style="background:${cor[n.status]}">${esc(n.status)}</span></td></tr>`).join('')
+      || '<tr><td colspan="8" class="vazio">Nenhuma nota no período</td></tr>';
+    $('#rod').textContent = `${ls.length} notas · ${moeda(ls.reduce((s,n) => s + Number(n.valor_total||0), 0))} · novas: ${ls.filter(n => n.status==='Nova').length}`;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaNota(ls[+tr.dataset.i].id));
+  };
+  ['nde','nate','nst','ndest'].forEach(id => $('#'+id).onchange = desenhar); $('#nbus').oninput = desenhar;
+  $('#csv').onclick = () => baixarCSV('Notas fiscais recebidas', ['Emissão','Número','Série','Emitente','CNPJ/CPF emitente','Destinatário','Natureza','Valor','SEFAZ','Situação','Chave'],
+    ls.map(n => [fmtData(n.data_emissao), n.numero, n.serie, n.emitente_nome, n.emitente_doc, n.destinatario_nome, n.natureza_operacao, fmtNum(n.valor_total), n.situacao_sefaz, n.status, n.chave]));
+  desenhar();
+}
+
+async function fichaNota(id){
+  const {data:n} = await sb.from('notas_fiscais').select('*').eq('id', id).single();
+  if (!n) return;
+  const d = n.dados || {};
+  const itens = Array.isArray(d.itens) ? d.itens : [];
+  const parc = Array.isArray(d.duplicatas) ? d.duplicatas : [];
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>NF ${esc(n.numero||'')}${n.serie?' série '+esc(n.serie):''} <span class="pill">${esc(n.status)}</span></h3>
+    <div class="rodape" style="margin-top:0">${fmtData(n.data_emissao)} · ${moeda(n.valor_total)} · ${esc(n.situacao_sefaz||'')}${n.manifestacao?' · manifestação: '+esc(n.manifestacao):''}</div>
+    <label>Emitente</label><div><b>${esc(n.emitente_nome)}</b> ${esc(n.emitente_doc||'')}</div>
+    <label>Destinatário</label><div>${esc(n.destinatario_nome)}</div>
+    <label>Natureza da operação</label><div>${esc(n.natureza_operacao||'')}</div>
+    <label>Chave de acesso</label><div style="font-family:monospace;font-size:12px;word-break:break-all">${esc(n.chave||'')}</div>
+    ${itens.length ? `<div class="secao">Itens</div><div class="tabela"><table><thead><tr><th>Produto</th><th class="num">Qtd</th><th>Un</th><th class="num">Valor</th></tr></thead><tbody>
+      ${itens.map(i => `<tr><td style="white-space:normal">${esc(i.descricao||'')}</td><td class="num">${fmtNum(i.quantidade_comercial,2)}</td><td>${esc(i.unidade_comercial||'')}</td><td class="num">${fmtNum(i.valor_bruto ?? i.valor_total)}</td></tr>`).join('')}</tbody></table></div>`
+      : (n.completa ? '' : '<div class="rodape">Esta nota só tem o resumo (a SEFAZ ainda não liberou o conteúdo completo).</div>')}
+    ${parc.length ? `<div class="rodape">Duplicatas: ${parc.map(p => `${fD(p.data_vencimento)} ${moeda(p.valor)}`).join(' · ')}</div>` : ''}
+    <div class="msg erro" id="nerro" style="display:none"></div>
+    ${podeEditar() && n.status !== 'Lançada' ? '<div class="acoes"><button class="btn" id="nlanc">Lançar em contas a pagar</button></div>' : ''}
+    <div class="acoes">${podeEditar() ? `<button class="btn sec" id="nign">${n.status==='Ignorada'?'Voltar para nova':'Ignorar nota'}</button>` : ''}<button class="btn sec" id="nfch">Fechar</button></div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#nfch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
+  const ign = m.querySelector('#nign');
+  if (ign) ign.onclick = async () => { const r = await sb.from('notas_fiscais').update({status: n.status==='Ignorada' ? 'Nova' : 'Ignorada'}).eq('id', n.id); if (r.error) return aviso(r.error.message); m.remove(); aviso('Atualizado'); render(); };
+  const lanc = m.querySelector('#nlanc');
+  if (lanc) lanc.onclick = async () => {
+    await carregarFin(true); m.remove();
+    const venc = parc[0]?.data_vencimento?.slice(0,10) || String(n.data_emissao||'').slice(0,10) || hojeISO();
+    const obs = itens.slice(0,3).map(i => i.descricao).filter(Boolean).join(', ');
+    formLancFin({tipo:'Pagar', operacao: 'Compra de produtos', pessoa:n.emitente_nome, documento:n.numero, tipo_documento:'Nota fiscal', data_emissao:String(n.data_emissao||'').slice(0,10), vencimento:venc,
+      valor: parc.length > 1 ? Number(parc[0].valor) : Number(n.valor_total), socio:n.destinatario_nome, observacao:obs, _nota:n.id, _parcelas: parc.length});
+  };
 }
 
 // ---------- Usuários ----------
