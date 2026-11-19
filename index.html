@@ -910,7 +910,7 @@ async function telaMapa(){
     // etiqueta do lote: vermelha só fêmeas, azul só machos, cinza quando misturado ou com animais sem sexo (*); total em cima
     const icone = ls => { const soma = sx => ls.filter(l => sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')).reduce((s,l) => s + l.quantidade, 0);
       const f = soma('F'), m = soma('M'), o = soma(null), t = tamBolinha(ls);
-      const cor = m && f ? '#ef6c00' : f && !o ? '#d32f2f' : m && !o ? '#1565c0' : '#616161'; // laranja: machos e fêmeas; cinza: com animais sem sexo
+      const cor = f && !m && !o ? '#d32f2f' : m && !f && !o ? '#1565c0' : '#ef6c00'; // vermelha só fêmeas, azul só machos, laranja o resto (misto ou sem sexo)
       return L.divIcon({className:'bol-lote', iconSize:[t,t], iconAnchor:[t/2,t/2],
         html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.55);cursor:grab">${m + f + o}</div>`}); };
     Object.values(camadas).forEach(({p, a, ls}) => {
