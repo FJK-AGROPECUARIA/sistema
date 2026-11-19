@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>FJK Sistema</title>
 <meta name="theme-color" content="#2f5d1e">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FJK">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -165,7 +170,8 @@ function render(){
     finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
     fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, opagri:telaOpAgri, chuvas:telaChuvas, safras:()=>telaCadastro('safras'), dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano'),
     manejo:telaManejo, negocios:telaNegocios, apartacao:()=>{ telaInicio(); formApartacao(); }, importpeso:telaImportPeso, agendarep:telaAgendaRep,
-    procedimentos:()=>telaCadastro('procedimentos'), pessoas:()=>telaCadastro('pessoas'), neg_Venda:()=>telaNegocio('Venda'), neg_Abate:()=>telaNegocio('Abate'), neg_Compra:()=>telaNegocio('Compra'), 'neg_Transferência':()=>telaNegocio('Transferência')};
+    procedimentos:()=>telaCadastro('procedimentos'), pessoas:()=>telaCadastro('pessoas'),
+    iatf:telaIATF, gmd:telaGMD, evolucao:telaEvolucao, conciliacao:telaConciliacao, neg_Venda:()=>telaNegocio('Venda'), neg_Abate:()=>telaNegocio('Abate'), neg_Compra:()=>telaNegocio('Compra'), 'neg_Transferência':()=>telaNegocio('Transferência')};
   if (ehGestao() && SO_FAZENDA.includes(E.tela)) E.tela = 'inicio';
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   if ($('#btBusca')) $('#btBusca').onclick = buscaRapida; FILA.marca();
@@ -176,7 +182,7 @@ function render(){
 function ir(t){ E.tela = t; render(); window.scrollTo(0,0); }
 
 const ehGestao = () => !!E.fazenda?.sede_financeiro;
-const SO_FAZENDA = ['mapa','lancar','estoque','historico','animais','pesagem','manejo','histind','matrizes','lancrep','histrep','estinsumos','estmov','opagri','chuvas','areas','modulos','retiros','categorias','produtos','locais','safras','apartacao','importpeso','agendarep','procedimentos','neg_Venda','neg_Abate','neg_Compra','neg_Transferência'];
+const SO_FAZENDA = ['mapa','lancar','estoque','historico','animais','pesagem','manejo','histind','matrizes','lancrep','histrep','estinsumos','estmov','opagri','chuvas','areas','modulos','retiros','categorias','produtos','locais','safras','apartacao','importpeso','agendarep','procedimentos','iatf','gmd','evolucao','neg_Venda','neg_Abate','neg_Compra','neg_Transferência'];
 async function telaInicio(){
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   const sair = `<div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>`;
@@ -208,6 +214,8 @@ async function telaInicio(){
       ${q('manejo','⚖️','Manejo no curral','Pesagem, vacina, IA, diagnóstico… com bastão')}
       ${q('histind','🗂️','Histórico individual','Pesagens, mortes, vendas...')}
       ${q('importpeso','📥','Importar da balança','Arquivo CSV da pesagem')}
+      ${q('gmd','📈','Desempenho (GMD)','Ganho de peso por área e categoria')}
+      ${q('evolucao','⏫','Evolução de categoria','Mudar categoria pela idade')}
     </div>
     <div class="secao">Vendas, compras e transferências</div>
     <div class="grade">
@@ -223,6 +231,7 @@ async function telaInicio(){
       ${q('lancrep','💉','Lançar reprodutivo','Inseminação, diagnóstico, parição')}
       ${q('histrep','📊','Histórico reprodutivo','Taxa de prenhez e partos')}
       ${q('agendarep','📅','Agenda reprodutiva','A diagnosticar, partos, descarte')}
+      ${q('iatf','🗓️','Protocolos de IATF','D0, D8, D10 e diagnóstico')}
     </div>
     <div class="secao">Estoque de insumos</div>
     <div class="grade">
@@ -281,6 +290,7 @@ async function telaInicioGestao(q, sair, ligar){
       ${q('finreceber','💰','Contas a receber', venR ? `<span style="color:var(--vermelho)">${venR} vencidas</span>` : 'Em aberto e recebidas')}
       ${q('finsaldos','🏦','Contas e saldos','Saldos, extrato e transferências')}
       ${q('finfluxo','📈','Fluxo de caixa','Entradas e saídas por mês')}
+      ${q('conciliacao','🧮','Conciliação bancária','Importar extrato OFX do banco')}
       ${q('finplano','🧾','Plano de contas','Contas de receita e despesa')}
       ${q('fincentros','🎯','Centros de custo','Pecuária, administrativo...')}
     </div>
@@ -315,7 +325,8 @@ const CAD = {
     colunas:[['codigo','Código'],['nome','Nome'],['categoria_oficial','Categoria oficial'],['sexo','Sexo'],['especie','Espécie']],
     campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],
       ['categoria_oficial','Categoria oficial',{obr:1,op:['Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Fêmeas acima 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos acima 36M']}],
-      ['sexo','Sexo',{op:['','M','F']}],['especie','Espécie',{op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}]],
+      ['sexo','Sexo',{op:['','M','F']}],['especie','Espécie',{op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}],
+      ['idade_min_meses','Idade mínima (meses)',{tipo:'number'}],['idade_max_meses','Idade máxima (meses) – passou disso, muda de categoria',{tipo:'number'}],['proxima_categoria_id','Próxima categoria',{ref:'categorias_manejo'}]],
     busca:['codigo','nome'], filtro:['categoria_oficial','Categoria oficial']},
   produtos: {tabela:'produtos', titulo:'Produtos', ordem:'nome', porFazenda:true,
     colunas:[['nome','Nome'],['unidade','Unidade'],['tipo_uso','Tipo de uso'],['ativo','Situação','b']],
@@ -775,7 +786,7 @@ async function buscarAnimal(cod, fid){
 async function telaAnimais(){
   const B = await baseFazenda();
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Animais</h2>
-      ${podeEditar() ? '<button class="btn" id="novo">+ Novo</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Novo</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button><button class="btn sec" id="imprimir">Imprimir lista de curral</button></div>
     <div class="filtros"><input id="a_busca" placeholder="Brinco ou chip" inputmode="numeric">
       <select id="a_status"><option value="ativo">Ativos</option><option value="inativo">Saídas (mortos, vendidos...)</option><option value="">Todos</option></select>
       <select id="a_sexo"><option value="">Sexo: todos</option><option value="M">Machos</option><option value="F">Fêmeas</option></select>
@@ -804,6 +815,8 @@ async function telaAnimais(){
     document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaAnimal(tr.dataset.id));
   };
   $('#a_ver').onclick = buscar; $('#a_busca').onkeydown = e => { if (e.key === 'Enter') buscar(); };
+  $('#imprimir').onclick = () => imprimirLista('Lista de curral', ['Brinco','Chip','Sexo','Raça','Idade','Categoria','Área','Último peso'],
+    rows.map(a => [a.brinco, a.chip, a.sexo, a.raca, idade(a.data_nascimento), B.catPor[a.categoria_id]||'', B.areaPor[a.area_id]||'', fmtNum(a.peso_atual,0)]));
   $('#csv').onclick = () => baixarCSV('Animais', ['Brinco','Chip','Sexo','Raça','Idade','Peso (kg)','Data peso','Área','Categoria','Status'],
     rows.map(a => [a.brinco, a.chip, a.sexo, a.raca, idade(a.data_nascimento), fmtNum(a.peso_atual,0), a.data_peso?fmtData(a.data_peso+'T12:00:00'):'', B.areaPor[a.area_id]||'', B.catPor[a.categoria_id]||'', a.status]));
   buscar();
@@ -884,6 +897,7 @@ async function fichaAnimal(id){
     ${a.ativo && podeEditar() ? `<div class="secao">Lançar neste animal</div><div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px">
       ${Object.keys(OPS_IND).filter(o => !['Venda','Transferência - Saída'].includes(o)).map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:50px">${o}</button>`).join('')}
       <button class="btn sec peq" data-neg="Venda" style="min-height:50px">Vender (vivo)</button><button class="btn sec peq" data-neg="Abate" style="min-height:50px">Vender p/ abate</button><button class="btn sec peq" data-neg="Transferência" style="min-height:50px">Transferir de fazenda</button></div>` : ''}
+    ${curvaPeso(pes)}
     <div class="secao">Histórico</div>
     <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th class="num">Peso</th><th>Detalhe</th></tr></thead><tbody>
     ${(evs||[]).map(e => `<tr><td>${fmtData(e.data+'T12:00:00')}</td><td>${esc(e.operacao)}</td><td class="num">${fmtNum(e.peso,0)}</td><td>${esc([e.causa_morte, e.procedimentos, e.operacao==='Localização'?B.areaPor[e.area_id]:'', e.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Sem lançamentos</td></tr>'}
@@ -1645,6 +1659,339 @@ async function carenciaAnimal(a){
   return '';
 }
 
+// ---------- Nota fiscal pelo arquivo XML ----------
+function lerXmlNFe(txt){
+  const x = new DOMParser().parseFromString(txt, 'application/xml');
+  if (x.getElementsByTagName('parsererror').length) throw new Error('arquivo não é XML válido');
+  const tg = (el, n) => el ? el.getElementsByTagNameNS('*', n)[0] || el.getElementsByTagName(n)[0] : null;
+  const tx = (el, n) => tg(el, n)?.textContent?.trim() || '';
+  const inf = tg(x, 'infNFe'); if (!inf) throw new Error('não é uma NF-e');
+  const ide = tg(inf, 'ide'), emit = tg(inf, 'emit'), dest = tg(inf, 'dest'), tot = tg(inf, 'ICMSTot'), prot = tg(x, 'infProt');
+  const chave = (tx(prot, 'chNFe') || (inf.getAttribute('Id') || '').replace(/^NFe/, '')).trim();
+  const itens = [...inf.getElementsByTagNameNS('*', 'det')].map(d => { const p = tg(d, 'prod');
+    return {codigo:tx(p,'cProd'), descricao:tx(p,'xProd'), ncm:tx(p,'NCM'), cfop:tx(p,'CFOP'), unidade_comercial:tx(p,'uCom'), quantidade_comercial:Number(tx(p,'qCom'))||0,
+      valor_unitario:Number(tx(p,'vUnCom'))||0, valor_bruto:Number(tx(p,'vProd'))||0}; });
+  const duplicatas = [...inf.getElementsByTagNameNS('*', 'dup')].map(d => ({numero:tx(d,'nDup'), data_vencimento:tx(d,'dVenc'), valor:Number(tx(d,'vDup'))||0}));
+  const cst = tx(prot, 'cStat');
+  return {chave, numero:tx(ide,'nNF'), serie:tx(ide,'serie'), data_emissao:tx(ide,'dhEmi') || tx(ide,'dEmi') || null, natureza_operacao:tx(ide,'natOp'),
+    emitente_nome:tx(emit,'xNome'), emitente_doc:tx(emit,'CNPJ') || tx(emit,'CPF'), emitente_uf:tx(tg(emit,'enderEmit'),'UF'),
+    destinatario_nome:tx(dest,'xNome'), destinatario_doc:tx(dest,'CNPJ') || tx(dest,'CPF'), valor_total:Number(tx(tot,'vNF'))||0,
+    situacao_sefaz: cst === '100' ? 'Autorizada' : cst ? 'cStat ' + cst : 'Sem protocolo', completa:true, dados:{itens, duplicatas, origem:'xml'}};
+}
+function importarXmlNotas(depois){
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.xml,text/xml,application/xml'; inp.multiple = true;
+  inp.onchange = async () => {
+    const fz = finFaz(), ok = [], erros = [];
+    for (const f of inp.files) {
+      try { const n = lerXmlNFe(await f.text()); if (!n.chave) throw new Error('sem chave de acesso');
+        const r = await sb.from('notas_fiscais').upsert({...n, fazenda_id:fz, status:'Nova'}, {onConflict:'fazenda_id,chave', ignoreDuplicates:true}).select('id');
+        if (r.error) throw r.error; ok.push(r.data?.length ? n.numero : n.numero + ' (já existia)'); }
+      catch(e) { erros.push(f.name + ': ' + e.message); }
+    }
+    alertaLista('Importação de XML', [`${ok.length} nota(s) importada(s)${ok.length ? ': ' + ok.join(', ') : ''}`, ...erros]);
+    if (depois) depois();
+  };
+  inp.click();
+}
+// entrada da nota no estoque de insumos de uma fazenda
+async function entradaEstoqueNota(n){
+  const itens = n.dados?.itens || []; if (!itens.length) return aviso('A nota não tem itens');
+  const fzs = E.fazendas.filter(f => !f.sede_financeiro);
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Entrada no estoque – NF ${esc(n.numero||'')}</h3>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Fazenda *</label><select id="es_f"><option value="">— escolha —</option>${fzs.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>
+      <div style="flex:1"><label>Local *</label><select id="es_l"><option value="">escolha a fazenda</option></select></div></div>
+    <label>Data da entrada</label><input id="es_d" type="date" value="${String(n.data_emissao||'').slice(0,10) || hojeISO()}" max="${hojeISO()}">
+    <div class="tabela" style="margin-top:10px"><table><thead><tr><th>Item da nota</th><th>Produto no estoque</th><th class="num">Qtd</th><th class="num">R$ unit.</th></tr></thead><tbody id="es_tb"></tbody></table></div>
+    <div class="rodape">Itens marcados "não entra" (serviço, frete…) ficam de fora.</div>
+    <div class="msg erro" id="es_e" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="es_x">Cancelar</button><button class="btn" id="es_ok">Dar entrada</button></div></div>`;
+  document.body.appendChild(m);
+  const q = s => m.querySelector(s); let prods = [];
+  q('#es_x').onclick = () => m.remove();
+  q('#es_f').onchange = async () => {
+    const f = q('#es_f').value; if (!f) return;
+    const [{data:ls}, {data:ps}] = await Promise.all([sb.from('locais_estoque').select('id,nome').eq('fazenda_id', f).eq('ativo', true).order('nome'), sb.from('produtos').select('id,nome,unidade').eq('fazenda_id', f).order('nome')]);
+    prods = ps || [];
+    q('#es_l').innerHTML = '<option value="">— escolha —</option>' + (ls||[]).map(l => `<option value="${l.id}">${esc(l.nome)}</option>`).join('');
+    const parecido = d => { const w = String(d).toLowerCase().split(/\W+/).filter(x => x.length > 3); return prods.find(p => w.some(x => p.nome.toLowerCase().includes(x)))?.id || ''; };
+    q('#es_tb').innerHTML = itens.map((i, k) => `<tr><td style="white-space:normal">${esc(i.descricao)}<br><small>${fmtNum(i.quantidade_comercial,2)} ${esc(i.unidade_comercial||'')}</small></td>
+      <td><select data-p="${k}"><option value="-">não entra</option><option value="+">+ criar "${esc(i.descricao.slice(0,30))}"</option>${prods.map(p => `<option value="${p.id}" ${p.id===parecido(i.descricao)?'selected':''}>${esc(p.nome)} (${esc(p.unidade)})</option>`).join('')}</select></td>
+      <td><input data-q="${k}" inputmode="decimal" style="width:80px" value="${i.quantidade_comercial}"></td><td><input data-v="${k}" inputmode="decimal" style="width:90px" value="${i.valor_unitario || (i.quantidade_comercial ? (i.valor_bruto/i.quantidade_comercial).toFixed(4) : '')}"></td></tr>`).join('');
+    m.querySelectorAll('[data-p]').forEach(s => { if (!s.value || s.value === '-') { if (!parecido(itens[+s.dataset.p].descricao)) s.value = '+'; } });
+  };
+  q('#es_ok').onclick = async () => {
+    const erro = t => { q('#es_e').textContent = t; q('#es_e').style.display = 'block'; };
+    const f = q('#es_f').value, l = q('#es_l').value, d = q('#es_d').value; if (!f || !l) return erro('Escolha a fazenda e o local');
+    q('#es_ok').disabled = true; const linhas = [];
+    for (const [k, i] of itens.entries()) {
+      let pid = m.querySelector(`[data-p="${k}"]`).value; if (pid === '-') continue;
+      if (pid === '+') { const r = await sb.from('produtos').insert({fazenda_id:f, nome:i.descricao.slice(0,80), unidade:(i.unidade_comercial||'un').toLowerCase().slice(0,5), tipo_uso:'Insumo', ativo:true}).select('id').single();
+        if (r.error) { q('#es_ok').disabled = false; return erro(r.error.message); } pid = r.data.id; }
+      linhas.push({fazenda_id:f, data:d, tipo:'Compra', produto_id:pid, local_id:l, quantidade:nBR(m.querySelector(`[data-q="${k}"]`).value), valor_unitario:nBR(m.querySelector(`[data-v="${k}"]`).value) || null,
+        pessoa:n.emitente_nome, documento:n.numero, observacao:'NF ' + (n.numero||'') + ' – ' + i.descricao.slice(0,60)});
+    }
+    if (!linhas.length) { q('#es_ok').disabled = false; return erro('Nenhum item para dar entrada'); }
+    const r = await sb.from('movimentos_estoque').insert(linhas);
+    if (r.error) { q('#es_ok').disabled = false; return erro(r.error.message); }
+    await sb.from('notas_fiscais').update({dados:{...(n.dados||{}), estoque:{fazenda_id:f, data:d, itens:linhas.length}}}).eq('id', n.id);
+    m.remove(); aviso(`${linhas.length} item(ns) lançados no estoque`);
+  };
+}
+
+// ---------- Conciliação bancária (extrato OFX) ----------
+function lerOFX(txt){
+  const g = (b, t) => { const m = b.match(new RegExp('<' + t + '>([^<\\r\\n]*)', 'i')); return m ? m[1].trim() : ''; };
+  const dt = s => s ? `${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}` : '';
+  const trs = txt.split(/<STMTTRN>/i).slice(1).map(b => ({fitid:g(b,'FITID'), data:dt(g(b,'DTPOSTED')), valor:Number(g(b,'TRNAMT').replace(',','.'))||0, desc:[g(b,'NAME'), g(b,'MEMO')].filter(Boolean).join(' – '), tipo:g(b,'TRNTYPE')}));
+  const bal = txt.match(/<LEDGERBAL>[\s\S]*?<BALAMT>([^<\r\n]+)[\s\S]*?<DTASOF>([^<\r\n]+)/i);
+  return {trs, saldo: bal ? Number(bal[1].replace(',','.')) : null, saldoData: bal ? dt(bal[2].trim()) : ''};
+}
+async function telaConciliacao(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin(true);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Conciliação bancária</h2></div>
+    <div class="tabela" style="padding:12px">
+      <div class="rodape" style="margin-top:0">Baixe o extrato no site ou app do banco no formato OFX e escolha aqui. O sistema acha as contas em aberto de mesmo valor (até 10 dias de diferença) e você confirma.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:180px"><label>Conta *</label><select id="cc_c"><option value="">— escolha —</option>${FIN.contas.filter(c => c.ativo).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+        <div style="flex:1;min-width:180px"><label>Arquivo OFX *</label><input id="cc_f" type="file" accept=".ofx,.OFX,text/plain"></div></div>
+      <div id="cc_sal" class="rodape"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:160px"><label>Plano para novos pagamentos</label><select id="cc_pd"><option value="">—</option>${FIN.planos.filter(p => p.natureza === 'Despesa').map(p => `<option>${esc(p.codigo+' - '+p.nome)}</option>`).join('')}</select></div>
+        <div style="flex:1;min-width:160px"><label>Plano para novos recebimentos</label><select id="cc_pr"><option value="">—</option>${FIN.planos.filter(p => p.natureza === 'Receita').map(p => `<option>${esc(p.codigo+' - '+p.nome)}</option>`).join('')}</select></div>
+        <div style="flex:1;min-width:140px"><label>Centro de custo dos novos</label><select id="cc_cc"><option value="">—</option>${FIN.centros.map(c => `<option>${esc(c.nome)}</option>`).join('')}</select></div></div></div>
+    <div class="tabela" style="margin-top:10px"><table><thead><tr><th>Data</th><th>No extrato</th><th class="num">Valor</th><th>No sistema</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div><div class="acoes"><button class="btn" id="cc_ok" disabled>Aplicar</button></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let X = null, linhas = [];
+  const montar = () => {
+    const conta = FIN.contas.find(c => c.id === $('#cc_c').value); if (!X || !conta) return;
+    const usados = new Set(), dias = (a,b) => Math.abs(new Date(a) - new Date(b)) / 864e5;
+    linhas = X.trs.map(t => {
+      const ja = FIN.lancs.find(l => l.extrato_id === t.fitid && t.fitid);
+      if (ja) return {t, ja};
+      const tipo = t.valor < 0 ? 'Pagar' : 'Receber', v = Math.abs(t.valor);
+      const baixado = FIN.lancs.filter(l => !usados.has(l.id) && !l.extrato_id && l.tipo === tipo && l.status === 'Efetivada' && l.conta_id === conta.id && Math.abs(Number(l.valor_pago ?? l.valor) - v) < 0.01 && dias(l.data_pagamento, t.data) <= 3);
+      const abertos = FIN.lancs.filter(l => !usados.has(l.id) && l.tipo === tipo && l.status === 'Em aberto' && Math.abs(Number(l.valor) - v) < 0.01 && dias(l.vencimento, t.data) <= 10).sort((a,b) => dias(a.vencimento,t.data) - dias(b.vencimento,t.data));
+      const c = [...baixado.map(l => ({l, k:'marca'})), ...abertos.map(l => ({l, k:'baixa'}))];
+      if (c[0]) usados.add(c[0].l.id);
+      return {t, c};
+    });
+    $('#tb').innerHTML = linhas.map((x, i) => `<tr><td>${fD(x.t.data)}</td><td style="white-space:normal">${esc(x.t.desc)}</td><td class="num" style="color:${x.t.valor<0?'var(--vermelho)':'var(--verde)'}">${fmtNum(x.t.valor)}</td><td>${x.ja ? '✔ já conciliado: ' + esc(x.ja.pessoa||'') :
+      `<select data-i="${i}" style="max-width:340px">${x.c.map((o,j) => `<option value="${j}">${o.k === 'marca' ? '✔ já baixado: ' : 'Baixar: '}${esc(o.l.pessoa||'')} · venc. ${fD(o.l.vencimento)}${o.l.parcela ? ' · ' + esc(o.l.parcela) : ''}</option>`).join('')}<option value="novo" ${x.c.length ? '' : 'selected'}>+ Criar lançamento novo</option><option value="ign">Ignorar</option></select>`}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Extrato sem lançamentos</td></tr>';
+    const conc = linhas.filter(x => x.ja).length, sug = linhas.filter(x => !x.ja && x.c.length).length;
+    $('#rod').innerHTML = `${linhas.length} lançamentos no extrato · ${conc} já conciliados · ${sug} com sugestão · ${linhas.length - conc - sug} sem correspondência`;
+    const s = saldoConta(conta, X.saldoData || undefined);
+    $('#cc_sal').innerHTML = X.saldo != null ? `Saldo no banco em ${fD(X.saldoData)}: <b>${moeda(X.saldo)}</b> · no sistema: <b>${moeda(s)}</b>${Math.abs(X.saldo - s) > 0.009 ? ` · diferença ${moeda(X.saldo - s)} <button class="btn sec peq" id="cc_aj">Acertar saldo inicial da conta</button>` : ' ✔'}` : '';
+    if ($('#cc_aj')) $('#cc_aj').onclick = async () => { const dif = X.saldo - s;
+      if (!confirm(`Somar ${moeda(dif)} ao saldo inicial da conta ${conta.nome}? Faça isso só depois de aplicar a conciliação, quando os lançamentos estiverem certos.`)) return;
+      const r = await sb.from('contas_bancarias').update({saldo_inicial:Number(conta.saldo_inicial||0) + dif}).eq('id', conta.id); if (r.error) return aviso(r.error.message);
+      await carregarFin(true); aviso('Saldo inicial acertado'); montar(); };
+    $('#cc_ok').disabled = !linhas.some(x => !x.ja);
+  };
+  $('#cc_f').onchange = async () => { const f = $('#cc_f').files[0]; if (!f) return; try { X = lerOFX(await f.text()); } catch(e) { return aviso('Não consegui ler o OFX'); } if (!X.trs.length) aviso('Nenhum lançamento encontrado no arquivo'); montar(); };
+  $('#cc_c').onchange = montar;
+  $('#cc_ok').onclick = async () => {
+    const conta = $('#cc_c').value; let b = 0, mk = 0, nv = 0; const erros = [];
+    const sem = linhas.filter((x, i) => !x.ja && document.querySelector(`[data-i="${i}"]`)?.value === 'novo').length;
+    if (sem && (!$('#cc_pd').value && linhas.some((x,i) => !x.ja && x.t.valor < 0 && document.querySelector(`[data-i="${i}"]`)?.value === 'novo'))) return aviso('Escolha o plano para os novos pagamentos');
+    if (!confirm('Aplicar a conciliação?')) return;
+    $('#cc_ok').disabled = true;
+    for (const [i, x] of linhas.entries()) {
+      if (x.ja) continue; const v = document.querySelector(`[data-i="${i}"]`)?.value; if (!v || v === 'ign') continue;
+      let r;
+      if (v === 'novo') { r = await sb.from('lancamentos_financeiros').insert({fazenda_id:FIN.faz, tipo:x.t.valor < 0 ? 'Pagar' : 'Receber', operacao:x.t.valor < 0 ? 'Pagamentos' : 'Recebimentos', pessoa:x.t.desc.slice(0,80) || 'Extrato',
+          vencimento:x.t.data, valor:Math.abs(x.t.valor), conta_id:conta, data_pagamento:x.t.data, valor_pago:Math.abs(x.t.valor), status:'Efetivada', plano_conta:(x.t.valor < 0 ? $('#cc_pd').value : $('#cc_pr').value) || null,
+          centro_custo:$('#cc_cc').value || null, observacao:'Criado pela conciliação do extrato', extrato_id:x.t.fitid || null}); if (!r.error) nv++; }
+      else { const o = x.c[+v];
+        r = o.k === 'marca' ? await sb.from('lancamentos_financeiros').update({extrato_id:x.t.fitid || ('ofx-' + x.t.data + x.t.valor)}).eq('id', o.l.id)
+          : await sb.from('lancamentos_financeiros').update({status:'Efetivada', data_pagamento:x.t.data, valor_pago:Math.abs(x.t.valor), conta_id:conta, extrato_id:x.t.fitid || null, atualizado_em:new Date().toISOString()}).eq('id', o.l.id);
+        if (!r.error) { o.k === 'marca' ? mk++ : b++; } }
+      if (r.error) erros.push(fD(x.t.data) + ' ' + x.t.desc + ': ' + r.error.message);
+    }
+    await carregarFin(true); aviso(`${b} baixados, ${mk} confirmados, ${nv} criados`); if (erros.length) alertaLista('Não entraram', erros); montar();
+  };
+}
+
+// ---------- Anexos das contas ----------
+async function blocoAnexos(m, reg){
+  const box = m.querySelector('#l_anexos'); if (!box || !reg.id) return;
+  const desenhar = async () => {
+    const lista = reg.anexos || [];
+    const links = await Promise.all(lista.map(async a => { const {data} = await sb.storage.from('anexos').createSignedUrl(a.path, 3600); return `<a href="${data?.signedUrl || '#'}" target="_blank" rel="noopener">📎 ${esc(a.nome)}</a>`; }));
+    box.innerHTML = `<label>Anexos (boleto, nota, comprovante)</label><div>${links.join('<br>') || '<span class="rodape">Nenhum anexo</span>'}</div>${podeEditar() ? '<input type="file" id="l_up" multiple accept="image/*,application/pdf,.xml">' : ''}`;
+    const up = box.querySelector('#l_up');
+    if (up) up.onchange = async () => {
+      for (const f of up.files) {
+        const path = `${reg.id}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g,'_')}`;
+        const r = await sb.storage.from('anexos').upload(path, f); if (r.error) { aviso('Não enviou: ' + r.error.message); continue; }
+        reg.anexos = [...(reg.anexos || []), {path, nome:f.name}];
+      }
+      await sb.from('lancamentos_financeiros').update({anexos:reg.anexos}).eq('id', reg.id); aviso('Anexo salvo'); desenhar();
+    };
+  };
+  desenhar();
+}
+
+// ---------- Evolução de categoria por idade ----------
+const idadeMeses = n => { if (!n) return null; const d = new Date(n+'T12:00:00'), h = new Date(); let m = (h.getFullYear()-d.getFullYear())*12 + h.getMonth()-d.getMonth(); if (h.getDate() < d.getDate()) m--; return Math.max(0, m); };
+async function telaEvolucao(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const fid = E.fazenda.id, B = await baseFazenda();
+  const {data:cats} = await sb.from('categorias_manejo').select('id,nome,idade_max_meses,proxima_categoria_id').eq('fazenda_id', fid);
+  const regra = Object.fromEntries((cats||[]).filter(c => c.idade_max_meses && c.proxima_categoria_id).map(c => [c.id, c]));
+  const anis = Object.keys(regra).length ? await todas(() => sb.from('animais').select('id,fazenda_id,brinco,data_nascimento,area_id,categoria_id').eq('fazenda_id', fid).eq('ativo', true).in('categoria_id', Object.keys(regra)).not('data_nascimento','is',null)) : [];
+  const sug = anis.map(a => ({a, m:idadeMeses(a.data_nascimento), r:regra[a.categoria_id]})).filter(x => x.m > x.r.idade_max_meses).sort((x,y) => y.m - x.m);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Evolução de categoria por idade</h2></div>
+    ${!Object.keys(regra).length ? '<div class="msg erro" style="display:block;background:#fff4e0;color:#8a5a00">Nenhuma regra ainda. Em Cadastros → Categorias de manejo, preencha em cada categoria a "idade máxima (meses)" e a "próxima categoria".</div>' : ''}
+    <div class="rodape">Animais individuais que já passaram da idade máxima da categoria. Os lotes sem brinco continuam pela "Mudança de categoria".</div>
+    <div class="tabela"><table><thead><tr><th><input type="checkbox" id="ev_all" checked></th><th>Brinco</th><th class="num">Idade (meses)</th><th>Área</th><th>De</th><th>Para</th></tr></thead><tbody>
+    ${sug.map((x,i) => `<tr><td><input type="checkbox" data-i="${i}" checked></td><td><b>${esc(x.a.brinco)}</b></td><td class="num">${x.m}</td><td>${esc(B.areaPor[x.a.area_id]||'–')}</td><td>${esc(B.catPor[x.a.categoria_id]||'')}</td><td>${esc(B.catPor[x.r.proxima_categoria_id]||'')}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum animal para mudar</td></tr>'}
+    </tbody></table></div><div class="rodape" id="rod">${sug.length} animais</div>
+    ${sug.length && podeEditar() ? '<div class="acoes"><button class="btn" id="ev_ok">Mudar os marcados</button></div>' : ''}`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#ev_all')) $('#ev_all').onchange = () => document.querySelectorAll('[data-i]').forEach(c => c.checked = $('#ev_all').checked);
+  if ($('#ev_ok')) $('#ev_ok').onclick = async () => {
+    const sel = [...document.querySelectorAll('[data-i]:checked')].map(c => sug[+c.dataset.i]); if (!sel.length || !confirm(`Mudar a categoria de ${sel.length} animais?`)) return;
+    $('#ev_ok').disabled = true; let n = 0; const d = hojeISO();
+    for (const x of sel) {
+      const nova = x.r.proxima_categoria_id; let r;
+      if (x.a.area_id) r = await sb.rpc('lancar_individual', {p:{animal_id:x.a.id, operacao:'Localização', data:d, area_id:x.a.area_id, categoria_id:nova, observacao:'Evolução de categoria por idade'}});
+      else { const {data:a} = await sb.from('animais').select('*').eq('id', x.a.id).single(); r = await sb.rpc('editar_animal', {p:{...a, animal_id:a.id, categoria_id:nova}}); }
+      if (!r.error) { n++; if (x.a.area_id) await sincLote(x.a, '', nova, d); }
+      if (n % 20 === 0) $('#rod').textContent = `Mudando… ${n}/${sel.length}`;
+    }
+    aviso(`${n} animais mudaram de categoria`); cacheBase = null; telaEvolucao();
+  };
+}
+
+// ---------- IATF ----------
+const PROTOCOLOS = {
+  'IATF 3 manejos (D0 · D8 · D10)': [{dia:0, acao:'Implante de progesterona + benzoato de estradiol'}, {dia:8, acao:'Retirada do implante + prostaglandina + eCG + cipionato'}, {dia:10, acao:'Inseminação (IATF)', ia:true}, {dia:40, acao:'Diagnóstico de gestação', dg:true}],
+  'IATF 4 manejos (D0 · D7 · D9 · D11)': [{dia:0, acao:'Implante + benzoato de estradiol'}, {dia:7, acao:'Prostaglandina'}, {dia:9, acao:'Retirada do implante + eCG + cipionato'}, {dia:11, acao:'Inseminação (IATF)', ia:true}, {dia:41, acao:'Diagnóstico de gestação', dg:true}],
+  'Ressincronização (D22 · D30 · D32)': [{dia:22, acao:'Novo implante nas inseminadas'}, {dia:30, acao:'Diagnóstico + retirada do implante nas vazias'}, {dia:32, acao:'Reinseminação das vazias', ia:true}, {dia:62, acao:'Diagnóstico de gestação', dg:true}]};
+const addDias = (d, n) => new Date(new Date(d+'T12:00:00').getTime() + n*864e5).toISOString().slice(0,10);
+async function telaIATF(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  const {data} = await sb.from('iatf_lotes').select('*').eq('fazenda_id', E.fazenda.id).order('d0', {ascending:false});
+  const ls = data || [], hoje = hojeISO();
+  const prox = l => (l.passos||[]).find(p => !p.feito);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Protocolos de IATF</h2>${podeEditar() ? '<button class="btn" id="novo">+ Novo lote de IATF</button>' : ''}</div>
+    <div class="tabela"><table><thead><tr><th>Lote</th><th>Protocolo</th><th>D0</th><th class="num">Fêmeas</th><th>Próxima etapa</th></tr></thead><tbody>
+    ${ls.map((l,i) => { const p = prox(l), dt = p ? addDias(l.d0, p.dia) : ''; return `<tr class="clic" data-i="${i}"><td><b>${esc(l.nome)}</b>${l.encerrado?' <span class="pill">encerrado</span>':''}</td><td>${esc(l.protocolo||'')}</td><td>${fD(l.d0)}</td><td class="num">${l.brincos.length}</td>
+      <td>${p ? `<span style="color:${dt < hoje ? 'var(--vermelho)' : dt === hoje ? 'var(--verde)' : ''}">${fD(dt)} – ${esc(p.acao)}</span>` : 'Tudo feito'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vazio">Nenhum lote de IATF</td></tr>'}
+    </tbody></table></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formIATF({});
+  document.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => fichaIATF(ls[+tr.dataset.i]));
+}
+function formIATF(l){
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Novo lote de IATF</h3>
+    <label>Nome do lote *</label><input id="ia_n" placeholder="Ex.: Novilhas estação 2026/27">
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Data do D0 *</label><input id="ia_d" type="date" value="${hojeISO()}"></div>
+      <div style="flex:2"><label>Protocolo</label><select id="ia_p">${Object.keys(PROTOCOLOS).map(p => `<option>${p}</option>`).join('')}</select></div></div>
+    <label>Touro / sêmen</label><input id="ia_r">
+    <label>Brincos das fêmeas (passe o bastão ou cole a lista)</label><input id="ia_c" autocomplete="off" placeholder="brinco ou chip + Enter">
+    <textarea id="ia_l" rows="5" style="width:100%;margin-top:6px" placeholder="um por linha"></textarea>
+    <div class="rodape" id="ia_i"></div>
+    <div class="msg erro" id="ia_e" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="ia_x">Cancelar</button><button class="btn" id="ia_ok">Criar lote</button></div></div>`;
+  document.body.appendChild(m);
+  const q = s => m.querySelector(s);
+  campoLeitor(q('#ia_c'), async v => { const a = await buscarAnimal(v); if (!a) { q('#ia_i').innerHTML = `<span style="color:var(--vermelho)">${esc(limpaCod(v))} não encontrado</span>`; }
+    else if (a.sexo !== 'F') q('#ia_i').innerHTML = `<span style="color:var(--vermelho)">${esc(a.brinco)} não é fêmea</span>`;
+    else { const L = q('#ia_l').value.split(/\s+/).filter(Boolean); if (!L.includes(a.brinco)) q('#ia_l').value = [...L, a.brinco].join('\n'); q('#ia_i').textContent = `${a.brinco} adicionada · ${L.length + 1} fêmeas`; }
+    q('#ia_c').value = ''; q('#ia_c').focus(); });
+  q('#ia_x').onclick = () => m.remove();
+  q('#ia_ok').onclick = async () => {
+    const erro = t => { q('#ia_e').textContent = t; q('#ia_e').style.display = 'block'; };
+    const nome = q('#ia_n').value.trim(), br = [...new Set(q('#ia_l').value.toUpperCase().split(/[\s,;]+/).filter(Boolean))];
+    if (!nome) return erro('Dê um nome ao lote'); if (!br.length) return erro('Informe as fêmeas');
+    const r = await sb.from('iatf_lotes').insert({fazenda_id:E.fazenda.id, nome, protocolo:q('#ia_p').value, d0:q('#ia_d').value, passos:PROTOCOLOS[q('#ia_p').value], brincos:br, reprodutor:q('#ia_r').value.trim() || null});
+    if (r.error) return erro(r.error.message); m.remove(); aviso('Lote de IATF criado'); telaIATF();
+  };
+}
+function fichaIATF(l){
+  const m = document.createElement('div'), hoje = hojeISO(); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${esc(l.nome)}</h3><div class="rodape" style="margin-top:0">${esc(l.protocolo||'')} · D0 ${fD(l.d0)} · ${l.brincos.length} fêmeas${l.reprodutor ? ' · ' + esc(l.reprodutor) : ''}</div>
+    <div class="tabela" style="margin-top:8px"><table><thead><tr><th>Dia</th><th>Data</th><th>Etapa</th><th></th></tr></thead><tbody>
+    ${l.passos.map((p,i) => { const dt = addDias(l.d0, p.dia); return `<tr><td>D${p.dia}</td><td style="color:${!p.feito && dt < hoje ? 'var(--vermelho)' : ''}">${fD(dt)}</td><td style="white-space:normal">${esc(p.acao)}</td>
+      <td>${p.feito ? '✔ feito' : podeEditar() ? `<button class="btn ${p.ia || p.dg ? '' : 'sec'} peq" data-p="${i}">${p.ia ? 'Lançar IA' : p.dg ? 'Abrir diagnóstico' : 'Marcar feito'}</button>` : ''}</td></tr>`; }).join('')}
+    </tbody></table></div>
+    <details style="margin-top:8px"><summary>Fêmeas do lote</summary><div style="font-size:13px">${l.brincos.map(esc).join(', ')}</div></details>
+    <div class="acoes"><button class="btn sec" id="x">Fechar</button>${ehAdmin() ? '<button class="btn perigo" id="del">Excluir lote</button>' : ''}</div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#x').onclick = () => m.remove();
+  if (m.querySelector('#del')) m.querySelector('#del').onclick = async () => { if (!confirm('Excluir este lote de IATF? Os lançamentos reprodutivos já feitos continuam.')) return; await sb.from('iatf_lotes').delete().eq('id', l.id); m.remove(); telaIATF(); };
+  const marcar = async i => { const passos = l.passos.map((p,j) => j === i ? {...p, feito:true, feito_em:hojeISO()} : p); const enc = passos.every(p => p.feito);
+    await sb.from('iatf_lotes').update({passos, encerrado:enc}).eq('id', l.id); l.passos = passos; };
+  m.querySelectorAll('[data-p]').forEach(b => b.onclick = async () => {
+    const i = +b.dataset.p, p = l.passos[i];
+    if (p.ia) {
+      const repr = prompt('Touro / sêmen usado:', l.reprodutor || ''); if (repr === null) return;
+      b.disabled = true;
+      const r = await sb.rpc('lancar_reprodutivo', {p:{fazenda_id:E.fazenda.id, operacao:'Inseminação', data:addDias(l.d0, p.dia) > hojeISO() ? hojeISO() : addDias(l.d0, p.dia), brincos:l.brincos, tipo_cobertura:'IATF', reprodutor:repr, observacao:'IATF lote ' + l.nome}});
+      if (r.error) { b.disabled = false; return aviso(r.error.message.replace(/^.*?: /,'')); }
+      await marcar(i); aviso(`${r.data?.lancados || 0} inseminações lançadas` + (r.data?.erros?.length ? ` · ${r.data.erros.length} com problema` : ''));
+      if (r.data?.erros?.length) alertaLista('Não lançadas', r.data.erros);
+    } else if (p.dg) {
+      m.remove(); const chave = 'fjk_man_' + E.fazenda.id; let S = null; try { S = JSON.parse(localStorage.getItem(chave)); } catch(e) {}
+      S = {...(S || {feitos:[]}), data:hojeISO(), acoes:['dg']}; localStorage.setItem(chave, JSON.stringify(S)); await marcar(i);
+      aviso('Manejo no curral aberto em modo diagnóstico'); ir('manejo'); return;
+    } else await marcar(i);
+    m.remove(); fichaIATF(l); telaIATF();
+  });
+}
+
+// ---------- Desempenho (GMD) por área e categoria ----------
+async function telaGMD(){
+  const B = await baseFazenda(), ini = new Date(Date.now() - 120*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Desempenho – ganho de peso</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="g_i" type="date" value="${ini}"><input id="g_f" type="date" value="${hojeISO()}"><select id="g_por"><option value="area">Por área</option><option value="cat">Por categoria</option></select><button class="btn" id="g_ok">Calcular</button></div>
+    <div class="tabela"><table><thead><tr><th id="g_h">Área</th><th class="num">Animais</th><th class="num">Peso inicial</th><th class="num">Peso final</th><th class="num">Dias</th><th class="num">GMD (kg/dia)</th><th class="num">@ ganhas</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod">Usa as pesagens individuais: para cada animal, a primeira e a última do período (mínimo 7 dias entre elas).</div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let rows = [];
+  const calc = async () => {
+    $('#tb').innerHTML = '<tr><td colspan="7" class="vazio">Calculando…</td></tr>';
+    const evs = await todas(() => sb.from('eventos_animal').select('animal_id,data,peso').eq('fazenda_id', E.fazenda.id).eq('operacao', 'Pesagem').gte('data', $('#g_i').value).lte('data', $('#g_f').value).not('peso','is',null).order('data'));
+    const anis = Object.fromEntries((await todas(() => sb.from('animais').select('id,area_id,categoria_id').eq('fazenda_id', E.fazenda.id).eq('ativo', true))).map(a => [a.id, a]));
+    const por = {}; evs.forEach(e => (por[e.animal_id] = por[e.animal_id] || []).push(e));
+    const G = {}, porArea = $('#g_por').value === 'area';
+    Object.entries(por).forEach(([id, L]) => { const a = anis[id]; if (!a || L.length < 2) return; const p0 = L[0], p1 = L[L.length-1], d = (new Date(p1.data) - new Date(p0.data)) / 864e5; if (d < 7) return;
+      const k = porArea ? a.area_id : a.categoria_id, g = G[k] = G[k] || {n:0, i:0, f:0, d:0, gm:0}; g.n++; g.i += +p0.peso; g.f += +p1.peso; g.d += d; g.gm += (p1.peso - p0.peso) / d; });
+    rows = Object.entries(G).map(([k,g]) => ({nome:(porArea ? B.areaPor[k] : B.catPor[k]) || '(sem)', n:g.n, i:g.i/g.n, f:g.f/g.n, d:g.d/g.n, gmd:g.gm/g.n, arr:(g.f-g.i)/30})).sort((a,b) => b.gmd - a.gmd);
+    $('#g_h').textContent = porArea ? 'Área' : 'Categoria';
+    $('#tb').innerHTML = rows.map(r => `<tr><td><b>${esc(r.nome)}</b></td><td class="num">${r.n}</td><td class="num">${fmtNum(r.i,0)}</td><td class="num">${fmtNum(r.f,0)}</td><td class="num">${fmtNum(r.d,0)}</td><td class="num" style="color:${r.gmd<0?'var(--vermelho)':''}"><b>${fmtNum(r.gmd,3)}</b></td><td class="num">${fmtNum(r.arr,1)}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Sem animais com 2 pesagens no período</td></tr>';
+    const N = rows.reduce((s,r) => s + r.n, 0); if (N) $('#rod').innerHTML = `${N} animais · GMD médio geral <b>${fmtNum(rows.reduce((s,r) => s + r.gmd*r.n, 0)/N, 3)} kg/dia</b>`;
+  };
+  $('#g_ok').onclick = calc; $('#csv').onclick = () => baixarCSV('Desempenho GMD', ['Grupo','Animais','Peso inicial','Peso final','Dias','GMD','@ ganhas (vivo)'], rows.map(r => [r.nome, r.n, fmtNum(r.i,0), fmtNum(r.f,0), fmtNum(r.d,0), fmtNum(r.gmd,3), fmtNum(r.arr,1)]));
+  calc();
+}
+
+// curva de peso (SVG) para a ficha do animal
+function curvaPeso(pes){
+  if (pes.length < 2) return '';
+  const W = 520, H = 120, P = 24, xs = pes.map(p => new Date(p.data).getTime()), ys = pes.map(p => Number(p.peso));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const X = t => P + (x1 === x0 ? 0 : (t - x0) / (x1 - x0) * (W - 2*P)), Y = v => H - P - (y1 === y0 ? 0 : (v - y0) / (y1 - y0) * (H - 2*P));
+  const pts = pes.map((p,i) => `${X(xs[i]).toFixed(1)},${Y(ys[i]).toFixed(1)}`).join(' ');
+  return `<div class="secao">Curva de peso</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;background:#fff;border:1px solid var(--borda);border-radius:8px">
+    <polyline points="${pts}" fill="none" stroke="#2f5d1e" stroke-width="2.5"/>${pes.map((p,i) => `<circle cx="${X(xs[i])}" cy="${Y(ys[i])}" r="3.5" fill="#4c8a2b"><title>${fD(p.data)}: ${fmtNum(p.peso,0)} kg</title></circle>`).join('')}
+    <text x="${P}" y="14" font-size="11" fill="#6b7565">${fmtNum(y1,0)} kg</text><text x="${P}" y="${H-6}" font-size="11" fill="#6b7565">${fmtNum(y0,0)} kg · ${fD(pes[0].data)}</text><text x="${W-P}" y="${H-6}" font-size="11" fill="#6b7565" text-anchor="end">${fD(pes[pes.length-1].data)}</text></svg>`;
+}
+
+// lista de curral para imprimir
+function imprimirLista(titulo, cab, linhas){
+  document.getElementById('imp')?.remove(); document.getElementById('impcss')?.remove();
+  const st = document.createElement('style'); st.id = 'impcss';
+  st.textContent = '@media print{body>*:not(#imp){display:none!important}#imp{display:block!important}} #imp{display:none} #imp table{width:100%;border-collapse:collapse;font-size:11px} #imp td,#imp th{border:1px solid #999;padding:3px 5px;text-align:left} #imp h3{margin:0 0 6px}';
+  const d = document.createElement('div'); d.id = 'imp';
+  d.innerHTML = `<h3>FJK Agropecuária – ${esc(E.fazenda.nome)} – ${esc(titulo)}</h3><div style="font-size:11px;margin-bottom:6px">Impresso em ${fmtData(new Date().toISOString())} · ${linhas.length} animais</div>
+    <table><thead><tr>${cab.map(c => `<th>${esc(c)}</th>`).join('')}<th style="width:70px">Peso</th><th style="width:160px">Observação</th></tr></thead><tbody>${linhas.map(l => `<tr>${l.map(c => `<td>${esc(c ?? '')}</td>`).join('')}<td></td><td></td></tr>`).join('')}</tbody></table>`;
+  document.head.appendChild(st); document.body.appendChild(d); setTimeout(() => window.print(), 200);
+}
+
 async function telaHistIndividual(){
   const fim = hojeISO(), ini = new Date(Date.now() - 33*864e5).toISOString().slice(0,10);
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Histórico individual</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
@@ -1810,6 +2157,7 @@ function formLancFin(reg){
     <label>Fazenda (de onde é esta conta)</label><select id="l_faz"><option value="">— todas / geral —</option>${E.fazendas.filter(f => !f.sede_financeiro).map(f => `<option value="${f.id}" ${f.id===reg.fazenda_ref_id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select>
     <label>Sócio / produtor</label><input id="l_soc" list="l_socl" value="${esc(reg.socio)}"><datalist id="l_socl">${socios.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
     <label>Observação</label><input id="l_obs" value="${esc(reg.observacao)}">
+    <div id="l_anexos"></div>
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="l_efet" ${efet?'checked':''}> <b>Já foi ${rec?'recebido':'pago'}</b></label>
     <div id="l_baixa" style="display:${efet?'flex':'none'};gap:8px"><div style="flex:1"><label>Data ${rec?'do recebimento':'do pagamento'}</label><input id="l_dpag" type="date" value="${reg.data_pagamento || hojeISO()}"></div>
       <div style="flex:1"><label>Valor ${rec?'recebido':'pago'} (R$)</label><input id="l_vpag" inputmode="decimal" value="${reg.valor_pago != null ? String(reg.valor_pago).replace('.',',') : ''}" placeholder="igual ao valor"></div></div>
@@ -1820,6 +2168,7 @@ function formLancFin(reg){
   document.body.appendChild(m);
   const q = s => m.querySelector(s);
   if (!pode) m.querySelectorAll('input,select').forEach(i => i.disabled = true);
+  blocoAnexos(m, reg);
   q('#l_cc').addEventListener('change', () => { if (q('#l_faz').value) return; const cc = q('#l_cc').value.toUpperCase();
     const f = E.fazendas.find(f => !f.sede_financeiro && cc.startsWith(f.nome.toUpperCase().replace('FAZENDA ','') + '-')); if (f) q('#l_faz').value = f.id; });
   q('#l_efet').onchange = () => { q('#l_baixa').style.display = q('#l_efet').checked ? 'flex' : 'none'; };
@@ -1850,7 +2199,8 @@ function formLancFin(reg){
         const d = new Date(d0); d.setMonth(d0.getMonth() + i);
         if (d.getDate() !== d0.getDate()) d.setDate(0);
         const iso = new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
-        linhas.push({...o, fazenda_id:FIN.faz, vencimento:iso, parcela:`${i+1}/${n}`,
+        linhas.push({...o, fazenda_id:FIN.faz, vencimento:(reg._vencs && reg._vencs.length === n && reg._vencs[i]) || iso, parcela:`${i+1}/${n}`,
+          ...(reg._valores && reg._valores.length === n ? {valor:reg._valores[i]} : {}),
           ...(i > 0 ? {status:'Em aberto', data_pagamento:null, valor_pago:null} : {})});
       }
       r = await sb.from('lancamentos_financeiros').insert(linhas).select('id');
@@ -2473,13 +2823,14 @@ async function telaNotas(){
   const notas = await todas(() => sb.from('notas_fiscais').select('id,chave,numero,serie,data_emissao,emitente_nome,emitente_doc,destinatario_nome,natureza_operacao,valor_total,situacao_sefaz,manifestacao,status,completa,lancamento_id,observacao').eq('fazenda_id', fz).order('data_emissao', {ascending:false}));
   const dests = [...new Set(notas.map(n => n.destinatario_nome).filter(Boolean))].sort();
   const ini = new Date(Date.now() - 60*864e5).toISOString().slice(0,10);
-  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Notas fiscais recebidas</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Notas fiscais recebidas</h2>${podeEditar() ? '<button class="btn" id="nxml">Importar XML</button>' : ''}<button class="btn sec" id="csv">Exportar planilha</button></div>
     <div class="filtros"><input id="nde" type="date" value="${ini}"><input id="nate" type="date" value="${hojeISO()}">
       <select id="nst"><option value="">Situação: todas</option><option>Nova</option><option>Lançada</option><option>Ignorada</option></select>
       <select id="ndest"><option value="">Destinatário: todos</option>${dests.map(d => `<option>${esc(d)}</option>`).join('')}</select>
       <input id="nbus" placeholder="Emitente, número ou chave"></div>
     <div class="tabela"><table><thead><tr><th>Emissão</th><th>Número</th><th>Emitente</th><th>Destinatário</th><th>Natureza</th><th class="num">Valor</th><th>SEFAZ</th><th>Situação</th></tr></thead><tbody id="tb"></tbody></table></div>
     <div class="rodape" id="rod"></div>`;
+  if ($('#nxml')) $('#nxml').onclick = () => importarXmlNotas(() => telaNotas());
   $('#volta').onclick = () => ir('inicio');
   let ls = [];
   const desenhar = () => {
@@ -2518,18 +2869,21 @@ async function fichaNota(id){
     ${parc.length ? `<div class="rodape">Duplicatas: ${parc.map(p => `${fD(p.data_vencimento)} ${moeda(p.valor)}`).join(' · ')}</div>` : ''}
     <div class="msg erro" id="nerro" style="display:none"></div>
     ${podeEditar() && n.status !== 'Lançada' ? '<div class="acoes"><button class="btn" id="nlanc">Lançar em contas a pagar</button></div>' : ''}
+    ${podeEditar() && itens.length ? `<div class="acoes">${d.estoque ? '<span class="rodape">✔ Já deu entrada no estoque (' + d.estoque.itens + ' itens)</span>' : ''}<button class="btn sec" id="nest">Dar entrada no estoque de insumos</button></div>` : ''}
     <div class="acoes">${podeEditar() ? `<button class="btn sec" id="nign">${n.status==='Ignorada'?'Voltar para nova':'Ignorar nota'}</button>` : ''}<button class="btn sec" id="nfch">Fechar</button></div></div>`;
   document.body.appendChild(m);
   m.querySelector('#nfch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
   const ign = m.querySelector('#nign');
   if (ign) ign.onclick = async () => { const r = await sb.from('notas_fiscais').update({status: n.status==='Ignorada' ? 'Nova' : 'Ignorada'}).eq('id', n.id); if (r.error) return aviso(r.error.message); m.remove(); aviso('Atualizado'); render(); };
+  if (m.querySelector('#nest')) m.querySelector('#nest').onclick = () => { m.remove(); entradaEstoqueNota(n); };
   const lanc = m.querySelector('#nlanc');
   if (lanc) lanc.onclick = async () => {
     await carregarFin(true); m.remove();
     const venc = parc[0]?.data_vencimento?.slice(0,10) || String(n.data_emissao||'').slice(0,10) || hojeISO();
     const obs = itens.slice(0,3).map(i => i.descricao).filter(Boolean).join(', ');
     formLancFin({tipo:'Pagar', operacao: 'Compra de produtos', pessoa:n.emitente_nome, documento:n.numero, tipo_documento:'Nota fiscal', data_emissao:String(n.data_emissao||'').slice(0,10), vencimento:venc,
-      valor: parc.length > 1 ? Number(parc[0].valor) : Number(n.valor_total), socio:n.destinatario_nome, observacao:obs, _nota:n.id, _parcelas: parc.length});
+      valor: parc.length > 1 ? Number(parc[0].valor) : Number(n.valor_total), socio:n.destinatario_nome, observacao:obs, _nota:n.id, _parcelas: parc.length,
+      _valores: parc.length > 1 ? parc.map(p => Number(p.valor)) : null, _vencs: parc.length > 1 ? parc.map(p => String(p.data_vencimento).slice(0,10)) : null});
   };
 }
 
