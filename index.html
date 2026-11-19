@@ -95,6 +95,9 @@ tr.clic:hover td{background:#f7faf3}
 .msg.erro{background:#fde8e6;color:var(--vermelho)}
 .msg.ok{background:#e7f3df;color:var(--verde)}
 #mapa{height:calc(100vh - 150px);min-height:380px;border-radius:12px;border:1px solid var(--borda)}
+.rotulo:before{display:none}
+.bq{display:block;border-radius:4px;padding:0 4px;margin:1px 0;border:1px solid rgba(255,255,255,.85);font-size:9px;line-height:1.25}
+.bt{display:block;font-size:12px;font-weight:800;margin-bottom:1px}
 .rotulo{background:none;border:0;box-shadow:none;color:#fff;font-weight:700;font-size:11px;text-shadow:0 0 3px #000,0 0 3px #000}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;background:#eef2e8;font-size:12px}
 .cor{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:middle;margin-right:6px}
@@ -832,6 +835,8 @@ async function telaModulos(){
 }
 
 // ---------- Mapa ----------
+// tamanho da bolinha do lote: 1 linha (só M ou só F), 2 ou 3 linhas (misto / sem sexo)
+function tamBolinha(ls){ const n = ['M','F',null].filter(sx => (ls||[]).some(l => l.quantidade > 0 && (sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')))).length; return n <= 1 ? 44 : n === 2 ? 66 : 78; }
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
@@ -860,7 +865,7 @@ async function telaMapa(){
   (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).forEach(a => {
     const ls = porArea[a.id] || []; const cab = ls.reduce((s,l) => s + l.quantidade, 0);
     const p = noCentro(L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:corMod[a.id] || a.cor || '#a7c232', fillOpacity:.55}), a.geometria).addTo(grupo);
-    p.bindTooltip(cab && !podeEditar() ? `${esc(a.codigo)}<br>${cab}` : esc(a.codigo), {permanent:true, direction:cab && podeEditar() ? 'bottom' : 'center', offset:cab && podeEditar() ? [0,8] : [0,0], className:'rotulo'});
+    p.bindTooltip(cab && !podeEditar() ? `${esc(a.codigo)}<br>${cab}` : esc(a.codigo), {permanent:true, direction:cab && podeEditar() ? 'bottom' : 'center', offset:cab && podeEditar() ? [0, tamBolinha(ls) / 2 + 2] : [0,0], className:'rotulo'});
     p.on('click', () => fichaArea(a, ls, modDe[a.id]));
     camadas[a.codigo.toLowerCase()] = {p, a, ls};
   });
@@ -875,10 +880,10 @@ async function telaMapa(){
     const icone = ls => { const soma = sx => ls.filter(l => sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')).reduce((s,l) => s + l.quantidade, 0);
       const f = soma('F'), m = soma('M'), o = soma(null);
       const cor = f && !m ? '#d32f2f' : m && !f ? '#1565c0' : '#6d6d6d';
-      const lin = [m ? m + ' M' : '', f ? f + ' F' : '', o ? o + '*' : ''].filter(Boolean);
-      const t = lin.length === 1 ? 42 : lin.length === 2 ? 50 : 58;
+      const lin = [m ? [m + ' M', '#1565c0'] : '', f ? [f + ' F', '#d32f2f'] : '', o ? [o + '*', '#424242'] : ''].filter(Boolean);
+      const t = tamBolinha(ls), caixa = lin.length > 1;
       return L.divIcon({className:'bol-lote', iconSize:[t,t], iconAnchor:[t/2,t/2],
-        html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:11px;font-weight:800;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:grab;white-space:nowrap">${lin.map(x => `<span>${x}</span>`).join('')}</div>`}); };
+        html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:11px;font-weight:800;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:grab;white-space:nowrap">${caixa ? `<span class="bt">${m + f + o}</span>` : ''}${lin.map(([x, c]) => caixa ? `<span class="bq" style="background:${c}">${x}</span>` : `<span>${x}</span>`).join('')}</div>`}); };
     Object.values(camadas).forEach(({p, a, ls}) => {
       const cab = ls.reduce((s,l) => s + l.quantidade, 0); if (!cab) return;
       const centro = p.getCenter();
