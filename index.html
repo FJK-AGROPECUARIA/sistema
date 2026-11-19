@@ -950,7 +950,7 @@ function fichaArea(a, ls, modulo){
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${cab?fmtNum(kg/cab,0):'–'}</b><span>kg médio</span></div>
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${a.hectares>0?fmtNum(ua/a.hectares,1):'–'}</b><span>UA/ha</span></div></div>
     <div class="tabela"><table><thead><tr><th>Categoria</th><th class="num">Cab</th><th class="num">Peso (kg)</th><th>Entrada</th></tr></thead><tbody>
-    ${ls.map(l => `<tr><td>${esc(l.cat_nome)}</td><td class="num">${l.quantidade}</td><td class="num">${fmtNum(l.peso_medio,0)}${l.tipo_peso==='Projetado'?'*':''}</td><td>${fmtData(l.data_entrada)}${l.data_entrada?' ('+diasDesde(l.data_entrada)+'d)':''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Área vazia</td></tr>'}
+    ${[...ls].sort((x, y) => y.quantidade - x.quantidade).map(l => `<tr><td>${esc(l.cat_nome)}</td><td class="num">${l.quantidade}</td><td class="num">${fmtNum(l.peso_medio,0)}${l.tipo_peso==='Projetado'?'*':''}</td><td>${fmtData(l.data_entrada)}${l.data_entrada?' ('+diasDesde(l.data_entrada)+'d)':''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Área vazia</td></tr>'}
     </tbody></table></div>
     ${ls.some(l=>l.tipo_peso==='Projetado')?`<div class="rodape">* peso projetado hoje pelo GMD da categoria${ls.filter(l=>l.peso_proj).map(l => ` · ${esc(l.cat_nome)}: último peso ${fmtNum(l.peso_real,0)} kg + ${fmtNum(l.gmd,3)} kg/dia`).join('')}</div>`:''}
     ${podeEditar() ? `<div class="secao">Lançar nesta área</div><div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px">
@@ -1000,7 +1000,7 @@ async function formOperacao(pre){
   const montar = () => {
     const op = g('o_op').value, cfg = OPS[op] || {t:'Saída'}, a = g('o_area').value;
     linhas = cfg.t === 'Entrada' ? (cats||[]).map(c => ({id:c.id, nome:c.nome, max:null, peso:null}))
-      : lotes.filter(l => l.area_id === a && l.quantidade > 0).map(l => ({id:l.categoria_id, nome:l.cat_nome, max:l.quantidade, peso:l.peso_medio}));
+      : lotes.filter(l => l.area_id === a && l.quantidade > 0).map(l => ({id:l.categoria_id, nome:l.cat_nome, max:l.quantidade, peso:l.peso_medio})).sort((x, y) => y.max - x.max);
     g('o_cdica').textContent = cfg.t === 'Entrada' ? '(todas as categorias – marque e informe as cabeças)' : a ? '(do lote da área – marque e ajuste a quantidade)' : '';
     g('th_q').style.display = cfg.peso ? 'none' : '';
     g('o_cats').innerHTML = linhas.length ? linhas.map((x, i) => `<tr data-i="${i}">
