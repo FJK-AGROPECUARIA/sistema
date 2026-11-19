@@ -224,7 +224,8 @@ const LOGO_FJK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAdwAAAD7CAYAAADA
 const ehGestao = () => !!E.fazenda?.sede_financeiro;
 const SO_FAZENDA = ['culturas','mapa','lancar','estoque','historico','animais','pesagem','manejo','histind','matrizes','lancrep','histrep','estinsumos','estmov','opagri','chuvas','areas','modulos','categorias','produtos','locais','safras','apartacao','importpeso','agendarep','procedimentos','iatf','gmd','evolucao','neg_Venda','neg_Abate','neg_Compra','neg_Transferência'];
 async function telaInicio(){
-  const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
+  // botões só com ícone e título; o texto de baixo aparece só quando é um aviso (ex.: notas novas)
+  const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b>${/vermelho/.test(String(sub)) ? `<span>${sub}</span>` : ''}</div>`;
   const sair = '';
   const ligar = () => {
     document.querySelectorAll('.quad[data-t]').forEach(d => d.onclick = () => ir(d.dataset.t));
