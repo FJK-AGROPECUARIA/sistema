@@ -161,7 +161,9 @@ function render(){
     lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico,
     animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual,
     finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
-    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, opagri:telaOpAgri, chuvas:telaChuvas, safras:()=>telaCadastro('safras'), dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
+    fincontas:()=>telaCadastro('fincontas'), estinsumos:telaEstoqueIns, opagri:telaOpAgri, chuvas:telaChuvas, safras:()=>telaCadastro('safras'), dre:telaDRE, livrocaixa:telaLivroCaixa, notas:telaNotas, matrizes:telaMatrizes, histrep:telaHistRep, lancrep:()=>{ telaInicio(); formReprodutivo({}); }, estmov:telaMovEst, locais:()=>telaCadastro('locais'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano'),
+    manejo:telaManejo, negocios:telaNegocios, neg_Venda:()=>telaNegocio('Venda'), neg_Abate:()=>telaNegocio('Abate'), neg_Compra:()=>telaNegocio('Compra'), 'neg_Transferência':()=>telaNegocio('Transferência')};
+  if (ehGestao() && SO_FAZENDA.includes(E.tela)) E.tela = 'inicio';
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -170,6 +172,7 @@ function render(){
 function ir(t){ E.tela = t; render(); window.scrollTo(0,0); }
 
 const ehGestao = () => !!E.fazenda?.sede_financeiro;
+const SO_FAZENDA = ['mapa','lancar','estoque','historico','animais','pesagem','manejo','histind','matrizes','lancrep','histrep','estinsumos','estmov','opagri','chuvas','areas','modulos','retiros','categorias','produtos','locais','safras','neg_Venda','neg_Abate','neg_Compra','neg_Transferência'];
 async function telaInicio(){
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   const sair = `<div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>`;
@@ -197,8 +200,16 @@ async function telaInicio(){
     <div class="secao">Controle individual</div>
     <div class="grade">
       ${q('animais','🏷️','Animais', fmtNum(nAni,0)+' ativos')}
-      ${q('pesagem','⚖️','Pesagem no curral','Brinco ou chip + peso')}
+      ${q('manejo','⚖️','Manejo no curral','Pesagem, vacina, IA, diagnóstico… com bastão')}
       ${q('histind','🗂️','Histórico individual','Pesagens, mortes, vendas...')}
+    </div>
+    <div class="secao">Vendas, compras e transferências</div>
+    <div class="grade">
+      ${q('neg_Venda','🤝','Vender animais vivos','Brinco a brinco ou lote')}
+      ${q('neg_Abate','🏭','Vender para abate','Frigorífico, carcaça, rendimento')}
+      ${q('neg_Compra','🛒','Comprar animais','Entrada com brinco e chip')}
+      ${q('neg_Transferência','🚚','Transferir entre fazendas','Leva os brincos e gera venda e compra')}
+      ${q('negocios','📜','Histórico de negócios','Vendas, compras e transferências')}
     </div>
     <div class="secao">Reprodução</div>
     <div class="grade">
@@ -273,6 +284,7 @@ async function telaInicioGestao(q, sair, ligar){
     </div>
     <div class="secao">Gestão</div>
     <div class="grade">
+      ${q('negocios','📜','Vendas, compras e transferências','De todas as fazendas')}
       ${q('fazendas','🏠','Fazendas', fazendas.length+' fazendas')}
       ${ehAdmin() ? q('usuarios','👥','Usuários e acessos','Quem usa o sistema') : ''}
       ${sair}
@@ -596,6 +608,7 @@ async function formOperacao(pre){
     <label id="l_peso">Peso médio (kg)</label><input id="o_peso" type="number" inputmode="decimal" step="0.1">
     <div id="b_causa"><label>Causa da morte</label><select id="o_causa">${CAUSAS.map(c => `<option>${c}</option>`).join('')}</select></div>
     <label>Observação</label><input id="o_obs">
+    <div id="o_dica" class="msg" style="display:none;background:#eef2e8"></div>
     <div class="msg erro" id="o_erro" style="display:none"></div>
     <div class="acoes"><button class="btn sec" id="o_can">Cancelar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
   document.body.appendChild(m);
@@ -614,6 +627,10 @@ async function formOperacao(pre){
     g('b_qtd').style.display = cfg.peso ? 'none' : '';
     g('l_peso').textContent = cfg.peso ? 'Peso médio (kg) *' : 'Peso médio (kg)';
     g('l_area').textContent = cfg.destino === 'area' ? 'Área de origem *' : 'Área *';
+    const neg = op === 'Venda' ? 'Venda' : op === 'Compra' ? 'Compra' : op.startsWith('Transferência entre fazendas') ? 'Transferência' : '';
+    g('o_dica').style.display = neg ? 'block' : 'none';
+    if (neg) { g('o_dica').innerHTML = `Dica: pela tela <a href="#" id="o_neg">${NEG[neg].titulo}</a> você lança brinco a brinco ou em lote, com preço, GTA e o financeiro na Gestão Total${neg === 'Transferência' ? ', e a entrada na outra fazenda sai junto' : ''}.`;
+      g('o_neg').onclick = e => { e.preventDefault(); m.remove(); E.tela = 'neg_' + neg; telaNegocio(neg); }; }
   };
   const preencher = () => { const l = lotes.find(x => x.area_id === g('o_area').value && x.categoria_id === g('o_cat').value);
     if (l && OPS[g('o_op').value].t !== 'Entrada') { if (!g('o_q').value) g('o_q').placeholder = 'até ' + l.quantidade; if (!g('o_peso').value && l.peso_medio) g('o_peso').placeholder = fmtNum(l.peso_medio,0) + ' (atual)'; } };
@@ -725,9 +742,12 @@ async function baseFazenda(){
 }
 const opcoes = (lista, sel, txt='nome') => '<option value="">— escolha —</option>' + lista.map(x => `<option value="${x.id}" ${x.id===sel?'selected':''}>${esc(x[txt])}</option>`).join('');
 
-async function buscarAnimal(cod){
-  const c = String(cod||'').trim().toUpperCase(); if (!c) return null;
-  const {data} = await sb.from('animais').select('*').eq('fazenda_id', E.fazenda.id).eq('ativo', true).or(`brinco.eq.${c},chip.eq.${c}`).limit(2);
+async function buscarAnimal(cod, fid){
+  fid = fid || E.fazenda.id;
+  const c = String(cod||'').trim().toUpperCase().replace(/[^A-Z0-9\-]/g,''); if (!c) return null;
+  const d = c.replace(/\D/g,'');
+  let {data} = await sb.from('animais').select('*').eq('fazenda_id', fid).eq('ativo', true).or(`brinco.eq.${c},chip.eq.${c}` + (d && d !== c ? `,chip.eq.${d}` : '')).limit(2);
+  if (!data?.length && d.length >= 12) ({data} = await sb.from('animais').select('*').eq('fazenda_id', fid).eq('ativo', true).like('chip', '%' + d.slice(-12)).limit(2));
   return (data||[])[0] || null;
 }
 
@@ -778,13 +798,13 @@ function escolherOrigem(){
   m.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { m.remove(); formNovoAnimal(b.dataset.o); });
 }
 
-async function formNovoAnimal(origem){
+async function formNovoAnimal(origem, pre = {}){
   const B = await baseFazenda();
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="caixa"><h3>${origem} de animal</h3>
     <label>Data *</label><input id="n_data" type="date" value="${hojeISO()}" max="${hojeISO()}">
-    <label>Brinco (identificação visual) *</label><input id="n_brinco" inputmode="numeric">
-    <label>Chip (identificação eletrônica)</label><input id="n_chip" inputmode="numeric">
+    <label>Brinco (identificação visual) *</label><input id="n_brinco" inputmode="numeric" value="${esc(pre.brinco||'')}">
+    <label>Chip (identificação eletrônica)</label><input id="n_chip" inputmode="numeric" value="${esc(pre.chip||'')}">
     <label>Sexo *</label><select id="n_sexo"><option value="">— escolha —</option><option value="M">Macho</option><option value="F">Fêmea</option></select>
     <label>Raça</label><input id="n_raca" list="racas" placeholder="Nelore, Cruzado...">
     <datalist id="racas"><option>Nelore</option><option>Cruzado</option><option>Anelorado</option><option>Angus</option></datalist>
@@ -837,16 +857,19 @@ async function fichaAnimal(id){
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${gmd||'–'}</b><span>GMD última pesagem</span></div>
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${esc(B.areaPor[a.area_id]||'–')}</b><span>${esc(B.catPor[a.categoria_id]||'área atual')}</span></div></div>
     ${a.ativo && podeEditar() ? `<div class="secao">Lançar neste animal</div><div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px">
-      ${Object.keys(OPS_IND).map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:50px">${o}</button>`).join('')}</div>` : ''}
+      ${Object.keys(OPS_IND).filter(o => !['Venda','Transferência - Saída'].includes(o)).map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:50px">${o}</button>`).join('')}
+      <button class="btn sec peq" data-neg="Venda" style="min-height:50px">Vender (vivo)</button><button class="btn sec peq" data-neg="Abate" style="min-height:50px">Vender p/ abate</button><button class="btn sec peq" data-neg="Transferência" style="min-height:50px">Transferir de fazenda</button></div>` : ''}
     <div class="secao">Histórico</div>
     <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th class="num">Peso</th><th>Detalhe</th></tr></thead><tbody>
     ${(evs||[]).map(e => `<tr><td>${fmtData(e.data+'T12:00:00')}</td><td>${esc(e.operacao)}</td><td class="num">${fmtNum(e.peso,0)}</td><td>${esc([e.causa_morte, e.procedimentos, e.operacao==='Localização'?B.areaPor[e.area_id]:'', e.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Sem lançamentos</td></tr>'}
     </tbody></table></div>
-    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="fch">Fechar</button>${podeEditar() ? '<button class="btn" id="fed">Editar cadastro</button>' : ''}</div></div>`;
   document.body.appendChild(m);
   m.querySelector('#fch').onclick = () => m.remove();
   m.onclick = e => { if (e.target === m) m.remove(); };
+  if (m.querySelector('#fed')) m.querySelector('#fed').onclick = () => { m.remove(); formEditarAnimal(a, () => fichaAnimal(a.id)); };
   m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formIndividual(a, b.dataset.op); });
+  m.querySelectorAll('[data-neg]').forEach(b => b.onclick = () => { m.remove(); document.querySelectorAll('.modal').forEach(x => x.remove()); E.tela = 'neg_' + b.dataset.neg; telaNegocio(b.dataset.neg, {animal:a}); });
 }
 
 async function formIndividual(a, op){
@@ -930,11 +953,458 @@ async function telaPesagemSeq(){
   desenhar(); $('#p_cod').focus();
 }
 
+// ---------- Leitor de chip (bastão) ----------
+const soDig = s => String(s||'').replace(/\D/g,'');
+const limpaCod = s => String(s||'').trim().toUpperCase().replace(/[^A-Z0-9\-]/g,'');
+let LEITOR = null;
+async function conectarBastao(cb){
+  if (LEITOR) { LEITOR.cb = cb; aviso('Bastão já conectado'); return; }
+  if (!('serial' in navigator)) return aviso('Neste aparelho, use o bastão no modo teclado (Bluetooth HID): ele escreve o número no campo sozinho.');
+  try {
+    const port = await navigator.serial.requestPort(); await port.open({baudRate: 9600});
+    const dec = new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(() => {});
+    const rd = dec.readable.getReader(); LEITOR = {port, rd, cb}; let buf = '';
+    (async () => { try { while (true) { const {value, done} = await rd.read(); if (done) break; buf += value;
+      let i; while ((i = buf.search(/[\r\n]/)) >= 0) { const ln = buf.slice(0, i).trim(); buf = buf.slice(i+1); if (ln && LEITOR?.cb) LEITOR.cb(ln); } } } catch(e) {} LEITOR = null; })();
+    aviso('Bastão conectado');
+  } catch(e) { aviso('Bastão não conectado: ' + e.message); }
+}
+// liga um campo ao leitor: Enter ou Tab do bastão dispara a busca
+function campoLeitor(inp, acao){
+  inp.onkeydown = e => { if ((e.key === 'Enter' || e.key === 'Tab') && inp.value.trim()) { e.preventDefault(); acao(inp.value); } };
+  if (LEITOR) LEITOR.cb = v => { inp.value = v; acao(v); };
+}
+
+// ---------- Edição do cadastro do animal ----------
+async function formEditarAnimal(a, depois){
+  const B = await baseFazenda();
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Editar animal ${esc(a.brinco)}</h3>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Brinco *</label><input id="e_br" value="${esc(a.brinco)}"></div>
+      <div style="flex:1"><label>Chip</label><input id="e_ch" inputmode="numeric" value="${esc(a.chip||'')}"></div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Sexo</label><select id="e_sx"><option value="">—</option><option value="M" ${a.sexo==='M'?'selected':''}>Macho</option><option value="F" ${a.sexo==='F'?'selected':''}>Fêmea</option></select></div>
+      <div style="flex:1"><label>Raça</label><input id="e_rc" list="e_racas" value="${esc(a.raca||'')}"><datalist id="e_racas">${['Nelore','Cruzado','Anelorado','Angus','Girolando','Brahman','Senepol','Tabapuã','Guzerá'].map(r => `<option>${r}</option>`).join('')}</datalist></div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Nascimento</label><input id="e_dn" type="date" value="${a.data_nascimento||''}"></div>
+      <div style="flex:1"><label>Categoria</label><select id="e_cat">${opcoes(B.cats, a.categoria_id)}</select></div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Brinco da mãe</label><input id="e_mae" value="${esc(a.mae_brinco||'')}"></div>
+      <div style="flex:1"><label>Pai / touro</label><input id="e_pai" value="${esc(a.pai||'')}"></div></div>
+    <label>Observação</label><input id="e_obs" value="${esc(a.observacao||'')}">
+    <div class="rodape">Para mudar de área use "Localização" ou o manejo no curral. Toda alteração fica registrada no histórico do animal.</div>
+    <div class="msg erro" id="e_erro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="e_can">Cancelar</button><button class="btn" id="e_sal">Salvar</button></div></div>`;
+  document.body.appendChild(m);
+  const g = id => m.querySelector('#'+id);
+  g('e_can').onclick = () => m.remove();
+  g('e_sal').onclick = async () => {
+    const p = {animal_id:a.id, brinco:g('e_br').value, chip:g('e_ch').value, sexo:g('e_sx').value, raca:g('e_rc').value, data_nascimento:g('e_dn').value,
+      categoria_id:g('e_cat').value, mae_brinco:g('e_mae').value, pai:g('e_pai').value, observacao:g('e_obs').value};
+    g('e_sal').disabled = true;
+    const r = await sb.rpc('editar_animal', {p});
+    g('e_sal').disabled = false;
+    if (r.error) { g('e_erro').textContent = r.error.message.replace(/^.*?: /,''); g('e_erro').style.display = 'block'; return; }
+    m.remove(); aviso(r.data === 'Nada mudou' ? 'Nada foi alterado' : 'Animal atualizado'); if (depois) depois();
+  };
+}
+
+// ajusta o estoque do rebanho (lote) quando um animal individual muda de área ou categoria
+async function sincLote(a, areaNova, catNova, d){
+  if (!a.area_id || !a.categoria_id) return '';
+  const {data:l} = await sb.from('lotes').select('quantidade').eq('area_id', a.area_id).eq('categoria_id', a.categoria_id).maybeSingle();
+  if (!l || l.quantidade < 1) return ' (lote da área não ajustado: sem saldo)';
+  const base = {fazenda_id:a.fazenda_id, data:d, quantidade:1, peso_medio:'', causa_morte:'', observacao:'Manejo individual brinco '+a.brinco, area_destino_id:'', categoria_destino_id:''};
+  let r = {error:null};
+  if (areaNova && areaNova !== a.area_id) r = await sb.rpc('lancar_operacao', {p:{...base, operacao:'Movimentação', area_id:a.area_id, categoria_id:a.categoria_id, area_destino_id:areaNova}});
+  const areaAt = areaNova || a.area_id;
+  if (!r.error && catNova && catNova !== a.categoria_id) r = await sb.rpc('lancar_operacao', {p:{...base, operacao:'Mudança de categoria', area_id:areaAt, categoria_id:a.categoria_id, categoria_destino_id:catNova}});
+  return r.error ? ' (lote não ajustado: ' + r.error.message.replace(/^.*?: /,'') + ')' : '';
+}
+
+// ---------- Manejo no curral (animal por animal) ----------
+const ACOES_MAN = [['peso','Pesagem'],['area','Mudar de área'],['cat','Mudar de categoria'],['san','Vacina / sanidade'],['ia','Inseminação'],['dg','Diagnóstico de gestação'],['chip','Colocar / trocar chip']];
+async function telaManejo(){
+  const B = await baseFazenda(), fid = E.fazenda.id, chave = 'fjk_man_' + fid;
+  let S = null; try { S = JSON.parse(localStorage.getItem(chave)); } catch(e) {}
+  S = S || {data:hojeISO(), acoes:['peso'], area:'', cat:'', proc:'', tcob:'IATF', repr:'', feitos:[]};
+  const salvar = () => { try { localStorage.setItem(chave, JSON.stringify(S)); } catch(e) {} };
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Manejo no curral</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="tabela" style="padding:12px">
+      <label style="margin-top:0">Data do manejo</label><input id="m_data" type="date" max="${hojeISO()}" value="${S.data}">
+      <label>O que fazer em cada animal</label>
+      <div class="grade" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">${ACOES_MAN.map(([k,t]) => `<label class="chk" style="margin:0"><input type="checkbox" data-ac="${k}" ${S.acoes.includes(k)?'checked':''}> ${t}</label>`).join('')}</div>
+      <div id="m_cfg"></div></div>
+    <div class="tabela" style="padding:12px;margin-top:10px">
+      <div style="display:flex;gap:8px;align-items:flex-end"><div style="flex:1"><label style="margin-top:0">Brinco ou chip — passe o bastão ou digite</label><input id="m_cod" autocomplete="off" style="font-size:20px"></div>
+        <button class="btn sec" id="m_bt" title="Conectar bastão por cabo USB ou Bluetooth">📡 Bastão</button></div>
+      <div id="m_ani"></div></div>
+    <div class="secao">Animais manejados <span id="m_cont"></span></div>
+    <div class="tabela"><table><thead><tr><th>Hora</th><th>Brinco</th><th class="num">Peso</th><th class="num">GMD</th><th>O que foi feito</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>
+    <div class="acoes"><button class="btn sec" id="m_limpa">Encerrar manejo e limpar a lista</button></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  const cfg = () => {
+    const tem = k => S.acoes.includes(k);
+    $('#m_cfg').innerHTML = (tem('area') ? `<label>Mandar para a área *</label><select id="c_area">${opcoes(B.areas, S.area, 'codigo')}</select>` : '')
+      + (tem('cat') ? `<label>Nova categoria *</label><select id="c_cat">${opcoes(B.cats, S.cat)}</select>` : '')
+      + (tem('san') ? `<label>Vacina / procedimento *</label><input id="c_proc" list="c_procs" value="${esc(S.proc)}" placeholder="Ex.: Aftosa, vermífugo, brucelose"><datalist id="c_procs">${B.procs.map(p => `<option>${esc(p.nome)}</option>`).join('')}</datalist>` : '')
+      + (tem('ia') ? `<div style="display:flex;gap:8px"><div style="flex:1"><label>Tipo de cobertura</label><select id="c_tcob">${['IATF','IA','Monta natural','Repasse'].map(t => `<option ${t===S.tcob?'selected':''}>${t}</option>`).join('')}</select></div>
+          <div style="flex:1"><label>Touro / sêmen</label><input id="c_repr" value="${esc(S.repr)}"></div></div>` : '')
+      + (tem('dg') ? '<div class="rodape">Diagnóstico: em cada vaca toque em Prenhe ou Vazia.</div>' : '');
+    [['c_area','area'],['c_cat','cat'],['c_proc','proc'],['c_tcob','tcob'],['c_repr','repr']].forEach(([id,k]) => { const el = $('#'+id); if (el) el.onchange = () => { S[k] = el.value; salvar(); }; });
+  };
+  document.querySelectorAll('[data-ac]').forEach(c => c.onchange = () => { S.acoes = [...document.querySelectorAll('[data-ac]:checked')].map(x => x.dataset.ac); salvar(); cfg(); });
+  $('#m_data').onchange = () => { S.data = $('#m_data').value; salvar(); };
+  cfg();
+  const desenhar = () => {
+    $('#tb').innerHTML = S.feitos.map(f => `<tr class="clic" data-a="${f.id}"><td>${esc(f.h)}</td><td><b>${esc(f.brinco)}</b></td><td class="num">${fmtNum(f.peso,0)}</td><td class="num">${f.gmd||''}</td><td>${esc(f.feito)}${f.erro?` <span style="color:var(--vermelho)">${esc(f.erro)}</span>`:''}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum animal ainda</td></tr>';
+    const ps = S.feitos.filter(f => Number(f.peso) > 0), gs = S.feitos.filter(f => f.gmd !== '' && f.gmd != null);
+    $('#m_cont').textContent = S.feitos.length ? `(${S.feitos.length})` : '';
+    $('#rod').innerHTML = S.feitos.length ? `${S.feitos.length} animais` + (ps.length ? ` · peso médio <b>${fmtNum(ps.reduce((s,f) => s + Number(f.peso), 0)/ps.length, 0)} kg</b>` : '')
+      + (gs.length ? ` · GMD médio <b>${fmtNum(gs.reduce((s,f) => s + Number(String(f.gmd).replace(',','.')), 0)/gs.length, 3)}</b>` : '')
+      + (S.feitos.some(f => f.dg) ? ` · prenhes <b>${S.feitos.filter(f => f.dg === 'P').length}</b> · vazias <b>${S.feitos.filter(f => f.dg === 'V').length}</b>` : '') : '';
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaAnimal(tr.dataset.a));
+  };
+  let atual = null, dg = null;
+  const ler = async v => {
+    const a = await buscarAnimal(v); atual = a; dg = null;
+    if (!a) {
+      $('#m_ani').innerHTML = `<div class="msg erro" style="display:block">✖ ${esc(limpaCod(v))} não encontrado entre os animais ativos desta fazenda.</div>
+        ${podeEditar() ? '<div class="acoes"><button class="btn sec" id="m_cad">Cadastrar este animal</button></div>' : ''}`;
+      if ($('#m_cad')) $('#m_cad').onclick = () => { const c = limpaCod(v); formNovoAnimal('Cadastro', soDig(c).length >= 12 ? {chip:soDig(c)} : {brinco:c}); };
+      $('#m_cod').select(); return;
+    }
+    const tem = k => S.acoes.includes(k), rep = a.situacao_reprodutiva ? ' · ' + a.situacao_reprodutiva : '';
+    const ja = S.feitos.some(f => f.id === a.id);
+    $('#m_ani').innerHTML = `<div style="border:2px solid var(--verde);border-radius:10px;padding:10px;margin-top:10px">
+      <div style="font-size:22px"><b>${esc(a.brinco)}</b> <span class="pill">${a.sexo==='M'?'Macho':a.sexo==='F'?'Fêmea':'?'}</span></div>
+      <div class="rodape" style="margin-top:2px">${a.chip?'Chip '+esc(a.chip)+' · ':''}${esc(a.raca||'')}${a.data_nascimento?' · '+idade(a.data_nascimento):''} · ${esc(B.catPor[a.categoria_id]||'sem categoria')} · área ${esc(B.areaPor[a.area_id]||'–')} · último peso ${fmtNum(a.peso_atual,0)||'–'} kg${a.data_peso?' em '+fmtData(a.data_peso+'T12:00:00'):''}${esc(rep)}</div>
+      ${ja ? '<div class="msg erro" style="display:block;background:#fff4e0;color:#8a5a00">Este animal já foi manejado nesta lista.</div>' : ''}
+      ${tem('peso') ? '<label>Peso (kg) *</label><input id="m_peso" type="number" inputmode="decimal" step="0.1" style="font-size:22px">' : ''}
+      ${tem('dg') ? (a.sexo === 'F' ? '<label>Diagnóstico *</label><div style="display:flex;gap:8px"><button class="btn sec" id="dg_p" style="flex:1;min-height:50px">Prenhe</button><button class="btn sec" id="dg_v" style="flex:1;min-height:50px">Vazia</button></div>' : '<div class="rodape">Macho: diagnóstico não se aplica.</div>') : ''}
+      ${tem('chip') ? `<label>Chip</label><input id="m_chip" inputmode="numeric" value="${esc(a.chip||'')}" placeholder="passe o bastão no chip novo">` : ''}
+      <label>Observação</label><input id="m_obs">
+      <div class="acoes"><button class="btn sec" id="m_ed">Editar cadastro</button><button class="btn sec" id="m_x">Pular</button><button class="btn" id="m_ok">Registrar</button></div></div>`;
+    const pf = $('#m_peso');
+    if (pf) { pf.focus(); pf.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); if (soDig(pf.value).length > 6) { const v2 = pf.value; pf.value = ''; $('#m_cod').value = v2; ler(v2); } else registrar(); } }; }
+    else $('#m_ok').focus();
+    const marca = x => { dg = x; $('#dg_p').className = 'btn' + (x==='P'?'':' sec'); $('#dg_v').className = 'btn' + (x==='V'?' perigo':' sec'); };
+    if ($('#dg_p')) { $('#dg_p').onclick = () => marca('P'); $('#dg_v').onclick = () => marca('V'); }
+    $('#m_ed').onclick = () => formEditarAnimal(a, () => ler(a.brinco));
+    $('#m_x').onclick = () => { atual = null; $('#m_ani').innerHTML = ''; $('#m_cod').value = ''; $('#m_cod').focus(); };
+    $('#m_ok').onclick = registrar;
+  };
+  const registrar = async () => {
+    const a = atual; if (!a) return;
+    const tem = k => S.acoes.includes(k), d = S.data, obs = $('#m_obs').value.trim();
+    const peso = $('#m_peso') ? $('#m_peso').value.replace(',','.') : '';
+    if (!S.acoes.length) return aviso('Marque o que vai fazer nos animais');
+    if (tem('peso') && !(Number(peso) > 0)) return aviso('Informe o peso');
+    if (tem('area') && !S.area) return aviso('Escolha a área de destino lá em cima');
+    if (tem('cat') && !S.cat) return aviso('Escolha a nova categoria lá em cima');
+    if (tem('san') && !S.proc.trim()) return aviso('Informe a vacina ou procedimento lá em cima');
+    if (tem('dg') && a.sexo === 'F' && !dg) return aviso('Toque em Prenhe ou Vazia');
+    $('#m_ok').disabled = true;
+    const feito = [], erros = []; let gmd = '';
+    const ind = async (op, extra) => { const r = await sb.rpc('lancar_individual', {p:{animal_id:a.id, operacao:op, data:d, observacao:obs, ...extra}}); if (r.error) erros.push(op + ': ' + r.error.message.replace(/^.*?: /,'')); return !r.error; };
+    if (tem('peso') && await ind('Pesagem', {peso})) {
+      feito.push(fmtNum(peso,0) + ' kg');
+      if (a.peso_atual && a.data_peso) { const dias = (new Date(d) - new Date(a.data_peso)) / 864e5; if (dias > 0) gmd = fmtNum((peso - a.peso_atual)/dias, 3); }
+    }
+    const novaA = tem('area') && S.area !== a.area_id ? S.area : '', novaC = tem('cat') && S.cat !== a.categoria_id ? S.cat : '';
+    if (novaA || novaC) {
+      if (!novaA && !a.area_id) erros.push('Categoria: animal sem área, mude a área junto');
+      else if (await ind('Localização', {area_id:novaA || a.area_id, categoria_id:novaC})) {
+        feito.push([novaA ? '→ ' + B.areaPor[novaA] : '', novaC ? '→ ' + B.catPor[novaC] : ''].filter(Boolean).join(' ') + await sincLote(a, novaA, novaC, d));
+      }
+    }
+    if (tem('san') && await ind('Vacinação e sanidade', {procedimentos:S.proc.trim()})) {
+      feito.push(S.proc.trim());
+      if (!B.procs.some(x => x.nome.toLowerCase() === S.proc.trim().toLowerCase())) { await sb.from('procedimentos').insert({fazenda_id:fid, nome:S.proc.trim()}); B.procs.push({nome:S.proc.trim()}); }
+    }
+    const repro = async (op, extra) => { const r = await sb.rpc('lancar_reprodutivo', {p:{fazenda_id:fid, operacao:op, data:d, brincos:[a.brinco], observacao:obs, ...extra}});
+      if (r.error) erros.push(op + ': ' + r.error.message.replace(/^.*?: /,'')); else if (r.data?.erros?.length) erros.push(r.data.erros.join(', ')); return !r.error && !r.data?.erros?.length; };
+    if (tem('ia')) { if (a.sexo !== 'F') erros.push('Inseminação: não é fêmea'); else if (await repro('Inseminação', {tipo_cobertura:S.tcob, reprodutor:S.repr})) feito.push(S.tcob + (S.repr ? ' ' + S.repr : '')); }
+    if (tem('dg') && a.sexo === 'F' && await repro('Diagnóstico de gestação', {diagnostico: dg === 'P'})) feito.push(dg === 'P' ? 'Prenhe' : 'Vazia');
+    const chipN = $('#m_chip') ? soDig($('#m_chip').value) || $('#m_chip').value.trim() : '';
+    if (tem('chip') && chipN && chipN !== a.chip && await ind('Identificação eletrônica', {chip:chipN})) feito.push('chip ' + chipN);
+    $('#m_ok').disabled = false;
+    const hm = new Date().toTimeString().slice(0,5);
+    S.feitos.unshift({h:hm, id:a.id, brinco:a.brinco, peso:tem('peso') ? peso : '', gmd, dg: tem('dg') && a.sexo === 'F' && feito.some(x => x === 'Prenhe' || x === 'Vazia') ? dg : '', feito:feito.join(' · '), erro:erros.join(' · ')});
+    salvar(); desenhar();
+    aviso(erros.length ? 'Atenção: ' + erros[0] : `${a.brinco} registrado`);
+    atual = null; $('#m_ani').innerHTML = ''; $('#m_cod').value = ''; $('#m_cod').focus();
+  };
+  campoLeitor($('#m_cod'), ler);
+  $('#m_bt').onclick = () => conectarBastao(v => { $('#m_cod').value = v; ler(v); });
+  $('#m_limpa').onclick = () => { if (!confirm('Limpar a lista deste manejo? Os lançamentos já gravados continuam no sistema.')) return; S.feitos = []; salvar(); desenhar(); };
+  $('#csv').onclick = () => baixarCSV('Manejo ' + fmtData(S.data+'T12:00:00'), ['Hora','Brinco','Peso (kg)','GMD','Feito','Erro'], S.feitos.map(f => [f.h, f.brinco, f.peso, f.gmd, f.feito, f.erro]));
+  desenhar(); $('#m_cod').focus();
+}
+
+// ---------- Vendas, abates, compras e transferências ----------
+const NEG = {
+  'Venda':{titulo:'Venda de animais vivos', pessoa:'Comprador', fin:'Receber', op:'Venda de animais'},
+  'Abate':{titulo:'Venda para abate (frigorífico)', pessoa:'Frigorífico', fin:'Receber', op:'Venda de animais'},
+  'Compra':{titulo:'Compra de animais', pessoa:'Vendedor', fin:'Pagar', op:'Compra de animais'},
+  'Transferência':{titulo:'Transferência entre fazendas', pessoa:'', fin:null}};
+const MODOS_VIVO = ['R$ por @ (peso vivo ÷ 30)','R$ por kg vivo','R$ por cabeça','Valor total'];
+const MODOS_CARC = ['R$ por @ de carcaça (÷ 15)','R$ por kg de carcaça','R$ por cabeça','Valor total'];
+const nBR = v => { v = String(v ?? '').trim(); if (!v) return 0; if (v.includes(',')) v = v.replace(/\./g,'').replace(',','.'); return Number(v) || 0; };
+function calcNeg(D){
+  const cab = D.itens.reduce((s,i) => s + (i.k === 'l' ? Number(i.quantidade) : 1), 0);
+  const kg = D.itens.reduce((s,i) => s + (i.k === 'l' ? Number(i.quantidade) * nBR(i.peso_vivo) : nBR(i.peso_vivo)), 0);
+  const carc = nBR(D.carc), preco = nBR(D.preco), m = D.modo || '';
+  let bruto = 0;
+  if (m.startsWith('R$ por @ (')) bruto = kg / 30 * preco;
+  else if (m === 'R$ por kg vivo') bruto = kg * preco;
+  else if (m.startsWith('R$ por @ de carcaça')) bruto = carc / 15 * preco;
+  else if (m === 'R$ por kg de carcaça') bruto = carc * preco;
+  else if (m === 'R$ por cabeça') bruto = cab * preco;
+  else bruto = preco;
+  const desc = bruto * nBR(D.funr) / 100 + nBR(D.outros);
+  return {cab, kg, carc, bruto: Math.round(bruto*100)/100, desc: Math.round(desc*100)/100, liq: Math.round((bruto - desc)*100)/100};
+}
+async function telaNegocio(tipo, pre){
+  const B = await baseFazenda(), fid = E.fazenda.id, cfgN = NEG[tipo], chave = `fjk_neg_${fid}_${tipo}`;
+  const saida = tipo !== 'Compra', transf = tipo === 'Transferência', abate = tipo === 'Abate';
+  let D = null; try { D = JSON.parse(localStorage.getItem(chave)); } catch(e) {}
+  D = D || {data:hojeISO(), contraparte:'', gta:'', doc:'', fd:'', ad:'', area_c:'', cat_c:'', sexo_c:'', raca_c:'', modo:(abate ? MODOS_CARC : MODOS_VIVO)[0], preco:'', carc:'', funr:'', outros:'', obs:'', gerar:true, pl_r:'', pl_d:'', cc:'', itens:[]};
+  const salvar = () => { try { localStorage.setItem(chave, JSON.stringify(D)); } catch(e) {} };
+  if (pre?.animal && !D.itens.some(i => i.animal_id === pre.animal.id)) { const a = pre.animal; D.itens.push({k:'a', animal_id:a.id, brinco:a.brinco, peso_vivo:'', area_id:a.area_id, categoria_id:a.categoria_id, ant:a.peso_atual}); salvar(); }
+  let F = null; try { F = await carregarFin(); } catch(e) {}
+  const pessoas = F ? [...new Set(F.lancs.map(l => l.pessoa).filter(Boolean))].sort() : [];
+  const destinos = E.fazendas.filter(f => !f.sede_financeiro && f.id !== fid);
+  const lotes = saida ? await carregarLotes() : [];
+  const planos = nat => (F?.planos || []).filter(p => p.natureza === nat).map(p => p.codigo + ' - ' + p.nome);
+  const chute = nat => planos(nat).find(p => /animai|gado|bovino|rebanho/i.test(p)) || '';
+  if (transf) { D.pl_r = D.pl_r || chute('Receita'); D.pl_d = D.pl_d || chute('Despesa'); }
+  const modos = abate ? MODOS_CARC : MODOS_VIVO;
+  const sel = (id, arr, v, vazio) => `<select id="${id}">${vazio !== undefined ? `<option value="">${vazio}</option>` : ''}${arr.map(x => `<option ${x===v?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>${cfgN.titulo}</h2><button class="btn sec" id="hist">Histórico</button></div>
+    <div class="tabela" style="padding:12px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:140px"><label style="margin-top:0">Data *</label><input id="n_data" type="date" max="${hojeISO()}" value="${D.data}"></div>
+        ${transf ? `<div style="flex:2;min-width:180px"><label style="margin-top:0">Fazenda de destino *</label><select id="n_fd"><option value="">— escolha —</option>${destinos.map(f => `<option value="${f.id}" ${f.id===D.fd?'selected':''}>${esc(f.nome)}</option>`).join('')}</select></div>`
+          : `<div style="flex:2;min-width:180px"><label style="margin-top:0">${cfgN.pessoa} *</label><input id="n_pes" list="n_pesl" value="${esc(D.contraparte)}"><datalist id="n_pesl">${pessoas.map(p => `<option value="${esc(p)}">`).join('')}</datalist></div>`}</div>
+      ${transf ? '<label>Área de destino *</label><select id="n_ad"><option value="">Escolha a fazenda primeiro</option></select><div class="rodape">A categoria de cada animal é mantida pelo nome; ela precisa existir também na fazenda de destino.</div>' : ''}
+      <div style="display:flex;gap:8px"><div style="flex:1"><label>GTA</label><input id="n_gta" value="${esc(D.gta)}"></div><div style="flex:1"><label>Nota fiscal</label><input id="n_doc" value="${esc(D.doc)}"></div></div>
+      ${!saida ? `<div class="secao" style="margin-top:12px">Padrão para os animais comprados</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:130px"><label>Área de entrada *</label><select id="n_areac">${opcoes(B.areas, D.area_c, 'codigo')}</select></div>
+          <div style="flex:1;min-width:130px"><label>Categoria *</label><select id="n_catc">${opcoes(B.cats, D.cat_c)}</select></div>
+          <div style="flex:1;min-width:100px"><label>Sexo</label><select id="n_sxc"><option value="">—</option><option value="M" ${D.sexo_c==='M'?'selected':''}>Macho</option><option value="F" ${D.sexo_c==='F'?'selected':''}>Fêmea</option></select></div>
+          <div style="flex:1;min-width:110px"><label>Raça</label><input id="n_rcc" value="${esc(D.raca_c)}" list="e_racas2"><datalist id="e_racas2"><option>Nelore</option><option>Cruzado</option><option>Anelorado</option><option>Angus</option></datalist></div></div>` : ''}
+    </div>
+    <div class="secao">Animais</div>
+    <div class="tabela" style="padding:12px">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+        <div style="flex:2;min-width:150px"><label style="margin-top:0">${saida ? 'Brinco ou chip — passe o bastão' : 'Brinco novo *'}</label><input id="n_cod" autocomplete="off" style="font-size:18px"></div>
+        ${!saida ? '<div style="flex:2;min-width:150px"><label style="margin-top:0">Chip</label><input id="n_chip" inputmode="numeric" autocomplete="off"></div>' : ''}
+        <div style="flex:1;min-width:100px"><label style="margin-top:0">Peso vivo (kg)</label><input id="n_peso" type="number" inputmode="decimal" step="0.1" style="font-size:18px"></div>
+        <button class="btn" id="n_add">Adicionar</button><button class="btn sec" id="n_bt">📡</button></div>
+      <div id="n_info" class="rodape"></div>
+      <div class="acoes" style="justify-content:flex-start"><button class="btn sec peq" id="n_lote">+ Lote sem brinco</button></div>
+      <div class="tabela" style="margin-top:8px"><table><thead><tr><th>Brinco / lote</th><th>Área · categoria</th><th class="num">Cab</th><th class="num">Peso vivo</th><th></th></tr></thead><tbody id="n_tb"></tbody></table></div></div>
+    <div class="secao">Valores</div>
+    <div class="tabela" style="padding:12px">
+      ${abate ? '<label style="margin-top:0">Peso total de carcaça (kg) – do romaneio do frigorífico</label><input id="n_carc" inputmode="decimal" value="'+esc(D.carc)+'">' : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:2;min-width:180px"><label${abate?'':' style="margin-top:0"'}>Forma de preço</label>${sel('n_modo', modos, D.modo)}</div>
+        <div style="flex:1;min-width:120px"><label${abate?'':' style="margin-top:0"'}>Preço (R$)</label><input id="n_preco" inputmode="decimal" value="${esc(D.preco)}"></div></div>
+      ${!transf ? `<div style="display:flex;gap:8px"><div style="flex:1"><label>Funrural / Senar (%)</label><input id="n_funr" inputmode="decimal" value="${esc(D.funr)}" placeholder="0"></div>
+        <div style="flex:1"><label>Outros descontos (R$)</label><input id="n_out" inputmode="decimal" value="${esc(D.outros)}" placeholder="frete, comissão..."></div></div>` : ''}
+      <div id="n_tot" class="grade" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px"></div>
+      ${transf ? `<div class="rodape">Ao finalizar: a ${esc(E.fazenda.nome)} registra a venda e a fazenda de destino registra a compra, as duas na Gestão Total (sem mexer em conta bancária).</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:160px"><label>Plano (venda)</label>${sel('n_plr', planos('Receita'), D.pl_r, '—')}</div>
+          <div style="flex:1;min-width:160px"><label>Plano (compra)</label>${sel('n_pld', planos('Despesa'), D.pl_d, '—')}</div></div>
+          <label>Centro de custo</label>${sel('n_cc', (F?.centros||[]).map(c => c.nome), D.cc, '—')}`
+        : `<label class="chk" style="margin-top:12px"><input type="checkbox" id="n_ger" ${D.gerar?'checked':''}> Lançar a conta a ${cfgN.fin === 'Receber' ? 'receber' : 'pagar'} na Gestão Total ao finalizar</label>`}
+      <label>Observação</label><input id="n_obs" value="${esc(D.obs)}">
+      <div class="msg erro" id="n_erro" style="display:none"></div>
+      <div class="acoes"><button class="btn sec" id="n_desc">Descartar</button><button class="btn" id="n_fin">Finalizar ${tipo.toLowerCase()}</button></div></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  $('#hist').onclick = () => ir('negocios');
+  const v = id => $('#'+id) ? $('#'+id).value : '';
+  const ler = () => { D.data = v('n_data'); D.contraparte = v('n_pes'); D.gta = v('n_gta'); D.doc = v('n_doc'); D.fd = v('n_fd') || D.fd; D.ad = v('n_ad') || (transf ? '' : D.ad);
+    D.area_c = v('n_areac'); D.cat_c = v('n_catc'); D.sexo_c = v('n_sxc'); D.raca_c = v('n_rcc'); D.modo = v('n_modo'); D.preco = v('n_preco'); D.carc = v('n_carc');
+    D.funr = v('n_funr'); D.outros = v('n_out'); D.obs = v('n_obs'); D.pl_r = v('n_plr'); D.pl_d = v('n_pld'); D.cc = v('n_cc'); D.gerar = $('#n_ger') ? $('#n_ger').checked : D.gerar; salvar(); };
+  const carregarAreasDest = async () => {
+    if (!transf) return;
+    const fd = v('n_fd'); if (!fd) { $('#n_ad').innerHTML = '<option value="">Escolha a fazenda primeiro</option>'; return; }
+    const {data} = await sb.from('areas').select('id,codigo').eq('fazenda_id', fd).eq('ativo', true).order('codigo');
+    $('#n_ad').innerHTML = '<option value="">— escolha —</option>' + (data||[]).map(a => `<option value="${a.id}" ${a.id===D.ad?'selected':''}>${esc(a.codigo)}</option>`).join('');
+  };
+  const totais = () => {
+    const t = calcNeg(D), card = (r, x) => `<div class="quad" style="min-height:62px;padding:8px;cursor:default"><span>${r}</span><b>${x}</b></div>`;
+    $('#n_tot').innerHTML = card('Cabeças', fmtNum(t.cab,0)) + card('Peso vivo', fmtNum(t.kg,0) + ' kg') + card('Peso médio', t.cab ? fmtNum(t.kg/t.cab,0) + ' kg' : '–')
+      + card('@ vivo (÷30)', fmtNum(t.kg/30,1))
+      + (abate ? card('@ carcaça (÷15)', fmtNum(t.carc/15,1)) + card('Rendimento', t.kg && t.carc ? fmtNum(t.carc/t.kg*100,1) + '%' : '–') : '')
+      + card('Valor bruto', moeda(t.bruto)) + (t.desc ? card('Descontos', moeda(t.desc)) : '') + card('Valor líquido', moeda(t.liq))
+      + card('Por cabeça', t.cab ? moeda(t.liq/t.cab) : '–');
+  };
+  const desenhar = () => {
+    $('#n_tb').innerHTML = D.itens.map((i, n) => `<tr><td><b>${i.k === 'l' ? 'Lote' : esc(i.brinco)}</b>${i.chip ? '<br><small>'+esc(i.chip)+'</small>' : ''}</td><td>${esc(B.areaPor[i.area_id]||'–')} · ${esc(B.catPor[i.categoria_id]||'–')}</td>
+      <td class="num">${i.k === 'l' ? i.quantidade : 1}</td><td class="num">${i.peso_vivo ? fmtNum(nBR(i.peso_vivo),0) + (i.k === 'l' ? ' (média)' : '') : ''}</td><td><button class="btn sec peq" data-rm="${n}">✖</button></td></tr>`).join('')
+      || '<tr><td colspan="5" class="vazio">Nenhum animal ainda</td></tr>';
+    document.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { D.itens.splice(+b.dataset.rm, 1); salvar(); desenhar(); });
+    totais();
+  };
+  let achado = null;
+  const buscar = async val => {
+    if (!saida) { $('#n_chip').focus(); return; }
+    const a = await buscarAnimal(val); achado = a;
+    if (!a) { $('#n_info').innerHTML = `<span style="color:var(--vermelho)">✖ ${esc(limpaCod(val))} não encontrado entre os ativos desta fazenda</span>`; $('#n_cod').select(); return; }
+    if (D.itens.some(i => i.animal_id === a.id)) { $('#n_info').innerHTML = `<span style="color:var(--vermelho)">Brinco ${esc(a.brinco)} já está na lista</span>`; achado = null; $('#n_cod').select(); return; }
+    $('#n_info').innerHTML = `✔ <b>${esc(a.brinco)}</b> · ${a.sexo==='M'?'Macho':a.sexo==='F'?'Fêmea':''} · ${esc(a.raca||'')} · ${esc(B.catPor[a.categoria_id]||'')} · área ${esc(B.areaPor[a.area_id]||'–')} · último peso ${fmtNum(a.peso_atual,0)||'–'} kg`;
+    $('#n_peso').focus();
+  };
+  const adicionar = async () => {
+    const cod = limpaCod($('#n_cod').value), peso = $('#n_peso').value.replace(',','.');
+    if (!cod) return $('#n_cod').focus();
+    if (saida) {
+      if (!achado || (achado.brinco !== cod && achado.chip !== cod && !soDig(achado.chip).endsWith(soDig(cod).slice(-12)))) await buscar(cod);
+      const a = achado; if (!a) return;
+      D.itens.push({k:'a', animal_id:a.id, brinco:a.brinco, peso_vivo:peso, area_id:a.area_id, categoria_id:a.categoria_id});
+    } else {
+      ler();
+      if (!D.area_c || !D.cat_c) return aviso('Escolha a área de entrada e a categoria dos animais comprados');
+      if (D.itens.some(i => i.brinco === cod)) return aviso('Esse brinco já está na lista');
+      if (await buscarAnimal(cod)) return aviso('Já existe animal ativo com esse brinco ou chip nesta fazenda');
+      D.itens.push({k:'c', brinco:cod, chip:soDig($('#n_chip').value) || $('#n_chip').value.trim(), sexo:D.sexo_c, raca:D.raca_c, peso_vivo:peso, area_id:D.area_c, categoria_id:D.cat_c});
+      $('#n_chip').value = '';
+    }
+    salvar(); desenhar(); achado = null;
+    $('#n_cod').value = ''; $('#n_peso').value = ''; $('#n_info').innerHTML = `${D.itens.length} na lista`; $('#n_cod').focus();
+  };
+  const formLote = () => {
+    const m = document.createElement('div'); m.className = 'modal';
+    const lista = saida ? lotes.filter(l => l.quantidade > 0).sort((x,y) => x.area_codigo.localeCompare(y.area_codigo)) : [];
+    m.innerHTML = `<div class="caixa"><h3>Lote sem brinco</h3>
+      ${saida ? `<label>Lote (área · categoria) *</label><select id="lt_l"><option value="">— escolha —</option>${lista.map((l,i) => `<option value="${i}">${esc(l.area_codigo)} · ${esc(l.cat_nome)} (${l.quantidade} cab)</option>`).join('')}</select>`
+        : `<label>Área *</label><select id="lt_a">${opcoes(B.areas, D.area_c, 'codigo')}</select><label>Categoria *</label><select id="lt_c">${opcoes(B.cats, D.cat_c)}</select>`}
+      <div style="display:flex;gap:8px"><div style="flex:1"><label>Cabeças *</label><input id="lt_q" type="number" inputmode="numeric" min="1"></div>
+        <div style="flex:1"><label>Peso médio (kg)</label><input id="lt_p" type="number" inputmode="decimal" step="0.1"></div></div>
+      <div class="acoes"><button class="btn sec" id="lt_x">Cancelar</button><button class="btn" id="lt_ok">Adicionar</button></div></div>`;
+    document.body.appendChild(m);
+    m.querySelector('#lt_x').onclick = () => m.remove();
+    m.querySelector('#lt_ok').onclick = () => {
+      const q = parseInt(m.querySelector('#lt_q').value), p = m.querySelector('#lt_p').value;
+      let area, cat;
+      if (saida) { const l = lista[m.querySelector('#lt_l').value]; if (!l) return aviso('Escolha o lote'); if (!(q > 0) || q > l.quantidade) return aviso('Quantidade entre 1 e ' + l.quantidade); area = l.area_id; cat = l.categoria_id; }
+      else { area = m.querySelector('#lt_a').value; cat = m.querySelector('#lt_c').value; if (!area || !cat) return aviso('Escolha área e categoria'); if (!(q > 0)) return aviso('Informe as cabeças'); }
+      D.itens.push({k:'l', area_id:area, categoria_id:cat, quantidade:q, peso_vivo:p}); salvar(); desenhar(); m.remove();
+    };
+  };
+  campoLeitor($('#n_cod'), buscar);
+  $('#n_peso').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const pv = $('#n_peso').value; if (soDig(pv).length > 6) { $('#n_peso').value = ''; $('#n_cod').value = pv; buscar(pv); } else adicionar(); } };
+  if ($('#n_chip')) $('#n_chip').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); $('#n_peso').focus(); } };
+  $('#n_add').onclick = adicionar; $('#n_lote').onclick = formLote;
+  $('#n_bt').onclick = () => conectarBastao(val => { $('#n_cod').value = val; buscar(val); });
+  document.querySelectorAll('#corpo input:not(#n_cod):not(#n_peso):not(#n_chip), #corpo select').forEach(el => { el.addEventListener('change', () => { ler(); totais(); }); el.addEventListener('input', () => { ler(); totais(); }); });
+  if (transf) { $('#n_fd').addEventListener('change', () => { D.ad = ''; carregarAreasDest(); }); carregarAreasDest(); }
+  $('#n_desc').onclick = () => { if (!confirm('Descartar esta lista? Nada foi gravado ainda.')) return; localStorage.removeItem(chave); telaNegocio(tipo); };
+  $('#n_fin').onclick = async () => {
+    ler();
+    const erro = t => { $('#n_erro').textContent = t; $('#n_erro').style.display = 'block'; };
+    const t = calcNeg(D);
+    if (!D.itens.length) return erro('Adicione os animais');
+    if (!transf && !D.contraparte.trim()) return erro('Preencha: ' + cfgN.pessoa.toLowerCase());
+    if (transf && (!D.fd || !v('n_ad'))) return erro('Escolha a fazenda e a área de destino');
+    if (abate && D.modo.includes('carcaça') && !(t.carc > 0)) return erro('Informe o peso total de carcaça');
+    if ((D.modo.includes('@ (') || D.modo === 'R$ por kg vivo') && D.itens.some(i => !nBR(i.peso_vivo))) return erro('Para preço por peso vivo, todos os animais precisam de peso (ou mude a forma de preço)');
+    if (!transf && D.gerar && !(t.liq > 0)) return erro('Informe o preço para gerar o financeiro (ou desmarque a opção)');
+    const resumo = `${tipo === 'Transferência' ? 'Transferir' : tipo === 'Compra' ? 'Comprar' : 'Vender'} ${t.cab} cabeças${t.kg ? ', ' + fmtNum(t.kg,0) + ' kg' : ''}${t.liq ? ', ' + moeda(t.liq) : ''}?`;
+    if (!confirm(resumo)) return;
+    // rateio do valor por animal (por peso, ou por cabeça)
+    const porPeso = !D.modo.includes('cabeça') && D.itens.every(i => nBR(i.peso_vivo) > 0) && t.kg > 0;
+    const itens = D.itens.map(i => { const q = i.k === 'l' ? Number(i.quantidade) : 1, kgI = q * nBR(i.peso_vivo);
+      const val = t.liq ? Math.round((porPeso ? t.liq * kgI / t.kg : t.liq * q / t.cab) * 100) / 100 : null;
+      return {animal_id:i.animal_id || '', brinco:i.k === 'c' ? i.brinco : (i.brinco || ''), chip:i.chip || '', sexo:i.sexo || '', raca:i.raca || '', area_id:i.area_id || '', categoria_id:i.categoria_id || '',
+        quantidade:q, peso_vivo:i.peso_vivo ? String(nBR(i.peso_vivo)) : '', valor:val}; });
+    const p = {fazenda_id:fid, tipo, data:D.data, contraparte:D.contraparte.trim(), fazenda_destino_id:D.fd || '', area_destino_id:v('n_ad'), gta:D.gta, documento:D.doc,
+      modo_preco:D.modo, preco:String(nBR(D.preco) || ''), peso_vivo:t.kg ? String(t.kg) : '', peso_carcaca:t.carc ? String(t.carc) : '', valor_bruto:String(t.bruto), descontos:String(t.desc), valor_liquido:String(t.liq),
+      dados:{funrural_pct:nBR(D.funr), outros_descontos:nBR(D.outros), rendimento: t.kg && t.carc ? Math.round(t.carc/t.kg*1000)/10 : null},
+      plano_receita:D.pl_r, plano_despesa:D.pl_d, centro_custo:D.cc, observacao:D.obs, itens};
+    $('#n_fin').disabled = true;
+    const r = await sb.rpc('fechar_negociacao', {p});
+    $('#n_fin').disabled = false;
+    if (r.error) return erro(r.error.message.replace(/^.*?: /,''));
+    localStorage.removeItem(chave); cacheBase = null;
+    const av = r.data?.avisos || [];
+    aviso(`${tipo} finalizada` + (av.length ? ' – ' + av.length + ' aviso(s)' : ''));
+    E.tela = 'negocios'; await telaNegocios();
+    if (av.length) alertaLista('Atenção', av);
+    if (!transf && D.gerar && F) {
+      await carregarFin(true);
+      const nat = cfgN.fin === 'Receber' ? 'Receita' : 'Despesa';
+      formLancFin({tipo:cfgN.fin, operacao:cfgN.op, pessoa:D.contraparte.trim(), documento:D.doc || null, tipo_documento:D.doc ? 'Nota fiscal' : null, data_emissao:D.data, vencimento:D.data,
+        valor:t.liq, plano_conta:chute(nat) || null, observacao:`${cfgN.titulo}: ${t.cab} cab, ${fmtNum(t.kg,0)} kg${abate && t.carc ? ', carcaça ' + fmtNum(t.carc,0) + ' kg' : ''}${D.gta ? ', GTA ' + D.gta : ''}`,
+        fazenda_ref_id:fid, _neg:r.data.id, _parcelas:1});
+    }
+  };
+  desenhar(); $('#n_cod').focus();
+}
+function alertaLista(titulo, itens){
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${esc(titulo)}</h3><ul>${itens.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="acoes"><button class="btn" id="ok">Entendi</button></div></div>`;
+  document.body.appendChild(m); m.querySelector('#ok').onclick = () => m.remove();
+}
+async function telaNegocios(){
+  const g = ehGestao(), ini = new Date(Date.now() - 90*864e5).toISOString().slice(0,10);
+  const nomeF = id => E.fazendas.find(f => f.id === id)?.nome || '';
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Vendas, compras e transferências</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    ${!g && podeEditar() ? `<div class="grade" style="grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">${Object.keys(NEG).map(t => `<button class="btn sec" data-novo="${t}" style="min-height:50px">${t === 'Venda' ? 'Vender vivo' : t === 'Abate' ? 'Abate' : t === 'Compra' ? 'Comprar' : 'Transferir'}</button>`).join('')}</div>` : ''}
+    <div class="filtros"><input id="g_ini" type="date" value="${ini}"><input id="g_fim" type="date" value="${hojeISO()}">
+      <select id="g_tipo"><option value="">Todos os tipos</option>${Object.keys(NEG).map(t => `<option>${t}</option>`).join('')}</select><button class="btn" id="g_ver">Visualizar</button></div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Tipo</th>${g ? '<th>Fazenda</th>' : ''}<th>Para / de quem</th><th class="num">Cab</th><th class="num">Peso vivo</th><th class="num">Valor líquido</th><th>Financeiro</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  document.querySelectorAll('[data-novo]').forEach(b => b.onclick = () => { E.tela = 'neg_' + b.dataset.novo; telaNegocio(b.dataset.novo); });
+  let rows = [];
+  const buscar = async () => {
+    let q = sb.from('negociacoes_gado').select('*').gte('data', $('#g_ini').value).lte('data', $('#g_fim').value).order('data', {ascending:false}).order('criado_em', {ascending:false}).limit(2000);
+    if (!g) q = q.or(`fazenda_id.eq.${E.fazenda.id},fazenda_destino_id.eq.${E.fazenda.id}`);
+    if ($('#g_tipo').value) q = q.eq('tipo', $('#g_tipo').value);
+    const {data, error} = await q;
+    if (error) { $('#tb').innerHTML = `<tr><td colspan="8" class="vazio">${esc(error.message)}</td></tr>`; return; }
+    rows = data || [];
+    const tipoTxt = n => n.tipo === 'Transferência' ? (n.fazenda_destino_id === E.fazenda.id && !g ? 'Transferência (entrada)' : 'Transferência') : n.tipo;
+    $('#tb').innerHTML = rows.map((n, i) => `<tr class="clic" data-i="${i}"><td>${fD(n.data)}</td><td>${tipoTxt(n)}</td>${g ? `<td>${esc(nomeF(n.fazenda_id))}</td>` : ''}<td>${esc(n.tipo === 'Transferência' ? (n.fazenda_destino_id === E.fazenda.id && !g ? 'de ' + nomeF(n.fazenda_id) : nomeF(n.fazenda_destino_id)) : n.contraparte)}</td>
+      <td class="num">${n.quantidade}</td><td class="num">${fmtNum(n.peso_vivo,0)}</td><td class="num">${n.valor_liquido ? moeda(n.valor_liquido) : ''}</td><td>${n.lancamento_id ? '✔ lançado' : (n.valor_liquido > 0 ? '<span style="color:var(--vermelho)">não lançado</span>' : '')}</td></tr>`).join('')
+      || `<tr><td colspan="8" class="vazio">Nada no período</td></tr>`;
+    const s = k => rows.reduce((t,n) => t + Number(n[k]||0), 0);
+    $('#rod').innerHTML = `${rows.length} registros · <b>${fmtNum(s('quantidade'),0)}</b> cab · ${fmtNum(s('peso_vivo'),0)} kg · ${moeda(s('valor_liquido'))}`;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => fichaNegocio(rows[+tr.dataset.i]));
+  };
+  $('#g_ver').onclick = buscar;
+  $('#csv').onclick = () => baixarCSV('Vendas compras transferencias', ['Data','Tipo','Fazenda','Para / de quem','GTA','Nota','Cab','Peso vivo','Peso carcaça','Forma de preço','Preço','Valor bruto','Descontos','Valor líquido'],
+    rows.map(n => [fD(n.data), n.tipo, nomeF(n.fazenda_id), n.tipo === 'Transferência' ? nomeF(n.fazenda_destino_id) : n.contraparte, n.gta, n.documento, n.quantidade, fmtNum(n.peso_vivo,0), fmtNum(n.peso_carcaca,0), n.modo_preco, fmtNum(n.preco), fmtNum(n.valor_bruto), fmtNum(n.descontos), fmtNum(n.valor_liquido)]));
+  buscar();
+}
+async function fichaNegocio(n){
+  const {data:its} = await sb.from('negociacoes_itens').select('*, areas(codigo), categorias_manejo!negociacoes_itens_categoria_id_fkey(nome)').eq('negociacao_id', n.id);
+  const nomeF = id => E.fazendas.find(f => f.id === id)?.nome || '';
+  const m = document.createElement('div'); m.className = 'modal';
+  const lin = (r, x) => x ? `<div><span style="color:#666">${r}:</span> <b>${x}</b></div>` : '';
+  m.innerHTML = `<div class="caixa"><h3>${esc(NEG[n.tipo].titulo)} – ${fD(n.data)}</h3>
+    ${lin('Fazenda', esc(nomeF(n.fazenda_id)))}${n.tipo === 'Transferência' ? lin('Destino', esc(nomeF(n.fazenda_destino_id))) : lin(NEG[n.tipo].pessoa, esc(n.contraparte))}
+    ${lin('GTA', esc(n.gta||''))}${lin('Nota fiscal', esc(n.documento||''))}${lin('Cabeças', fmtNum(n.quantidade,0))}${lin('Peso vivo', n.peso_vivo ? fmtNum(n.peso_vivo,0) + ' kg' : '')}
+    ${lin('Peso carcaça', n.peso_carcaca ? fmtNum(n.peso_carcaca,0) + ' kg' + (n.dados?.rendimento ? ' (rendimento ' + fmtNum(n.dados.rendimento,1) + '%)' : '') : '')}
+    ${lin('Preço', n.preco ? esc(n.modo_preco) + ': ' + moeda(n.preco) : '')}${lin('Valor bruto', n.valor_bruto ? moeda(n.valor_bruto) : '')}${lin('Descontos', Number(n.descontos) ? moeda(n.descontos) : '')}${lin('Valor líquido', n.valor_liquido ? moeda(n.valor_liquido) : '')}
+    ${lin('Observação', esc(n.observacao||''))}
+    <div class="tabela" style="margin-top:10px"><table><thead><tr><th>Brinco</th><th>Área · categoria</th><th class="num">Cab</th><th class="num">Peso</th><th class="num">Valor</th></tr></thead><tbody>
+      ${(its||[]).map(i => `<tr><td>${i.brinco ? '<b>'+esc(i.brinco)+'</b>' : 'Lote'}</td><td>${esc(i.areas?.codigo||'–')} · ${esc(i.categorias_manejo?.nome||'–')}</td><td class="num">${i.quantidade}</td><td class="num">${fmtNum(i.peso_vivo,0)}</td><td class="num">${i.valor ? moeda(i.valor) : ''}</td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="acoes"><button class="btn sec" id="x">Fechar</button>${n.tipo !== 'Transferência' && !n.lancamento_id && n.valor_liquido > 0 && podeEditar() ? '<button class="btn" id="lf">Lançar no financeiro</button>' : ''}${n.lancamento_id ? '<button class="btn sec" id="vf">Ver lançamento</button>' : ''}</div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#x').onclick = () => m.remove();
+  if (m.querySelector('#lf')) m.querySelector('#lf').onclick = async () => { m.remove(); await carregarFin(true); const c = NEG[n.tipo];
+    formLancFin({tipo:c.fin, operacao:c.op, pessoa:n.contraparte, documento:n.documento, tipo_documento:n.documento ? 'Nota fiscal' : null, data_emissao:n.data, vencimento:n.data, valor:Number(n.valor_liquido),
+      observacao:`${c.titulo}: ${n.quantidade} cab${n.gta ? ', GTA ' + n.gta : ''}`, fazenda_ref_id:n.fazenda_id, _neg:n.id, _parcelas:1}); };
+  if (m.querySelector('#vf')) m.querySelector('#vf').onclick = async () => { await carregarFin(true); const l = FIN.lancs.find(x => x.id === n.lancamento_id); if (!l) return aviso('Lançamento não encontrado (pode ter sido excluído)'); m.remove(); formLancFin(l); };
+}
+
 async function telaHistIndividual(){
   const fim = hojeISO(), ini = new Date(Date.now() - 33*864e5).toISOString().slice(0,10);
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Histórico individual</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
     <div class="filtros"><input id="h_ini" type="date" value="${ini}"><input id="h_fim" type="date" value="${fim}">
-      <select id="h_op"><option value="">Todas as operações</option>${['Pesagem','Cadastro','Compra','Nascimento','Localização','Vacinação e sanidade','Identificação eletrônica','Troca de brinco','Morte','Venda','Abate para consumo','Transferência - Entrada','Transferência - Saída','Exclusão','Apartação'].map(o => `<option>${o}</option>`).join('')}</select>
+      <select id="h_op"><option value="">Todas as operações</option>${['Pesagem','Cadastro','Compra','Nascimento','Localização','Vacinação e sanidade','Identificação eletrônica','Troca de brinco','Morte','Venda','Abate para consumo','Transferência - Entrada','Transferência - Saída','Exclusão','Apartação','Edição de cadastro'].map(o => `<option>${o}</option>`).join('')}</select>
       <input id="h_cod" placeholder="Brinco" inputmode="numeric"><button class="btn" id="h_ver">Visualizar</button></div>
     <div class="tabela"><table><thead><tr><th>Data</th><th>Brinco</th><th>Operação</th><th class="num">Peso (kg)</th><th>Detalhe</th></tr></thead><tbody id="tb"></tbody></table></div>
     <div class="rodape" id="rod"></div>`;
@@ -1021,6 +1491,7 @@ async function telaContasFin(tipo){
     <div class="filtros">
       <input id="fbus" placeholder="Pesquisar pessoa, plano, observação, documento">
       <select id="fcc"><option value="">Centro de custo: todos</option>${ccs.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+      <select id="ffz"><option value="">Fazenda: todas</option>${E.fazendas.filter(f => !f.sede_financeiro).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}<option value="-">Sem fazenda</option></select>
       <select id="fconta"><option value="">Conta: todas</option>${FIN.contas.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select>
     </div>
     <div class="grade" id="tots" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:10px"></div>
@@ -1029,7 +1500,7 @@ async function telaContasFin(tipo){
   $('#volta').onclick = () => ir('inicio');
   if ($('#novo')) $('#novo').onclick = () => formLancFin({tipo});
   const filtrar = () => {
-    const st = $('#fst').value, dt = $('#fdt').value, de = $('#fde').value, ate = $('#fate').value, b = $('#fbus').value.toLowerCase(), cc = $('#fcc').value, ct = $('#fconta').value;
+    const st = $('#fst').value, dt = $('#fdt').value, de = $('#fde').value, ate = $('#fate').value, b = $('#fbus').value.toLowerCase(), cc = $('#fcc').value, ct = $('#fconta').value, fz = $('#ffz').value;
     return lanc().filter(l => {
       const s = statusLanc(l);
       if (st === 'abertas' && !['Em aberto','Vencida'].includes(s)) return false;
@@ -1040,6 +1511,7 @@ async function telaContasFin(tipo){
       if (de && d < de) return false; if (ate && d > ate) return false;
       if (cc && !String(l.centro_custo||'').split(', ').includes(cc)) return false;
       if (ct && l.conta_id !== ct) return false;
+      if (fz && (fz === '-' ? l.fazenda_ref_id : l.fazenda_ref_id !== fz)) return false;
       if (b && ![l.pessoa, l.plano_conta, l.observacao, l.documento, l.socio].some(x => String(x||'').toLowerCase().includes(b))) return false;
       return true;
     });
@@ -1058,7 +1530,7 @@ async function telaContasFin(tipo){
     $('#rod').textContent = `${fmtNum(ls.length,0)} lançamentos` + (ls.length > mostra.length ? ` (mostrando os primeiros ${mostra.length}; use os filtros ou exporte a planilha)` : '');
     document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formLancFin(mostra[+tr.dataset.i]));
   };
-  ['fst','fdt','fde','fate','fcc','fconta'].forEach(id => $('#'+id).onchange = desenhar); $('#fbus').oninput = desenhar;
+  ['fst','fdt','fde','fate','fcc','fconta','ffz'].forEach(id => $('#'+id).onchange = desenhar); $('#fbus').oninput = desenhar;
   $('#csv').onclick = () => baixarCSV(titulo, ['Vencimento', rec?'Cliente':'Fornecedor','Operação','Documento','Tipo doc.','Plano de contas','Centro de custo','Parcela','Valor', rec?'Data recebimento':'Data pagamento', rec?'Valor recebido':'Valor pago','Conta','Forma','Situação','Sócio','Observação'],
     ls.map(l => [fD(l.vencimento), l.pessoa, l.operacao, l.documento, l.tipo_documento, l.plano_conta, l.centro_custo, l.parcela, fmtNum(l.valor), fD(l.data_pagamento), l.status==='Efetivada'?fmtNum(l.valor_pago ?? l.valor):'', nomeConta(l.conta_id), l.forma_pagamento, statusLanc(l), l.socio, l.observacao]));
   desenhar();
@@ -1084,11 +1556,12 @@ function formLancFin(reg){
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Emissão</label><input id="l_emi" type="date" value="${reg.data_emissao || (novo ? hojeISO() : '')}"></div>
       <div style="flex:1"><label>${novo ? '1º vencimento' : 'Vencimento'} *</label><input id="l_ven" type="date" value="${reg.vencimento || hojeISO()}"></div></div>
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Valor${novo ? ' de cada parcela' : ''} (R$) *</label><input id="l_val" inputmode="decimal" value="${reg.valor != null ? String(reg.valor).replace('.',',') : ''}"></div>
-      ${novo ? '<div style="flex:1"><label>Parcelas</label><input id="l_npar" type="number" min="1" max="120" value="${reg._parcelas||1}"></div>' : `<div style="flex:1"><label>Parcela</label><input id="l_par" value="${esc(reg.parcela)}"></div>`}</div>
+      ${novo ? `<div style="flex:1"><label>Parcelas</label><input id="l_npar" type="number" min="1" max="120" value="${reg._parcelas||1}"></div>` : `<div style="flex:1"><label>Parcela</label><input id="l_par" value="${esc(reg.parcela)}"></div>`}</div>
     <label>Plano de contas *</label>${sel('l_pl', optPl, reg.plano_conta, '—')}
     <label>Centro de custo *</label>${sel('l_cc', optCc, reg.centro_custo, '—')}
     <div style="display:flex;gap:8px"><div style="flex:1"><label>Conta</label><select id="l_conta"><option value="">—</option>${FIN.contas.filter(c => c.ativo || c.id === reg.conta_id).map(c => `<option value="${c.id}" ${c.id===reg.conta_id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div style="flex:1"><label>Forma de pagamento</label>${sel('l_forma', FORMAS.concat(reg.forma_pagamento && !FORMAS.includes(reg.forma_pagamento) ? [reg.forma_pagamento] : []), reg.forma_pagamento, '—')}</div></div>
+    <label>Fazenda (de onde é esta conta)</label><select id="l_faz"><option value="">— todas / geral —</option>${E.fazendas.filter(f => !f.sede_financeiro).map(f => `<option value="${f.id}" ${f.id===reg.fazenda_ref_id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select>
     <label>Sócio / produtor</label><input id="l_soc" list="l_socl" value="${esc(reg.socio)}"><datalist id="l_socl">${socios.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
     <label>Observação</label><input id="l_obs" value="${esc(reg.observacao)}">
     <label class="chk" style="margin-top:12px"><input type="checkbox" id="l_efet" ${efet?'checked':''}> <b>Já foi ${rec?'recebido':'pago'}</b></label>
@@ -1109,7 +1582,7 @@ function formLancFin(reg){
     const valor = num(q('#l_val').value);
     const o = {tipo, operacao:q('#l_op').value, pessoa:q('#l_pes').value.trim(), documento:q('#l_doc').value.trim()||null, tipo_documento:q('#l_tdoc').value||null,
       data_emissao:q('#l_emi').value||null, vencimento:q('#l_ven').value, valor, plano_conta:q('#l_pl').value||null, centro_custo:q('#l_cc').value||null,
-      conta_id:q('#l_conta').value||null, forma_pagamento:q('#l_forma').value||null, socio:q('#l_soc').value.trim()||null, observacao:q('#l_obs').value.trim()||null};
+      conta_id:q('#l_conta').value||null, forma_pagamento:q('#l_forma').value||null, socio:q('#l_soc').value.trim()||null, observacao:q('#l_obs').value.trim()||null, fazenda_ref_id:q('#l_faz').value||null};
     if (!o.pessoa) return erro(`Preencha: ${rec?'cliente':'fornecedor'}`);
     if (!o.vencimento) return erro('Preencha o vencimento');
     if (!(valor > 0)) return erro('Informe um valor maior que zero');
@@ -1133,6 +1606,7 @@ function formLancFin(reg){
           ...(i > 0 ? {status:'Em aberto', data_pagamento:null, valor_pago:null} : {})});
       }
       r = await sb.from('lancamentos_financeiros').insert(linhas).select('id');
+      if (!r.error && reg._neg) await sb.from('negociacoes_gado').update({lancamento_id:r.data?.[0]?.id || null}).eq('id', reg._neg);
       if (!r.error && reg._nota) await sb.from('notas_fiscais').update({status:'Lançada', lancamento_id:r.data?.[0]?.id || null}).eq('id', reg._nota);
     } else {
       o.parcela = q('#l_par').value.trim() || null; o.atualizado_em = new Date().toISOString();
@@ -1647,18 +2121,20 @@ async function telaDRE(){
     <div class="filtros"><select id="da">${anos.map(a => `<option ${a===hojeISO().slice(0,4)?'selected':''}>${a}</option>`).join('')}</select>
       <select id="dreg"><option value="caixa">Regime de caixa (pago e recebido)</option><option value="comp">Competência (pelo vencimento)</option></select>
       <select id="dcc"><option value="">Centro de custo: todos</option>${FIN.centros.map(c => `<option>${esc(c.nome)}</option>`).join('')}</select>
+      <select id="dfz"><option value="">Fazenda: todas</option>${E.fazendas.filter(f => !f.sede_financeiro).map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}<option value="-">Sem fazenda</option></select>
       <select id="dper"><option value="ano">Total do ano</option><option value="mes">Mês a mês</option></select></div>
     <div class="tabela"><table id="td"></table></div>
     <div class="rodape">DRE gerencial montada pelos grupos do plano de contas. Não inclui variação do valor do rebanho. Para a declaração oficial, confira com o contador.</div>`;
   $('#volta').onclick = () => ir('inicio');
   let csv = [], cab = [];
   const desenhar = () => {
-    const ano = $('#da').value, caixa = $('#dreg').value === 'caixa', cc = $('#dcc').value, mensal = $('#dper').value === 'mes';
+    const ano = $('#da').value, caixa = $('#dreg').value === 'caixa', cc = $('#dcc').value, mensal = $('#dper').value === 'mes', fz = $('#dfz').value;
     const L = {}; const det = {};
     FIN.lancs.forEach(l => {
       if (l.status === 'Cancelada') return;
       if (caixa && l.status !== 'Efetivada') return;
       if (cc && !String(l.centro_custo||'').split(', ').includes(cc)) return;
+      if (fz && (fz === '-' ? l.fazenda_ref_id : l.fazenda_ref_id !== fz)) return;
       const d = caixa ? (l.data_pagamento || l.vencimento) : l.vencimento;
       if (!d || d.slice(0,4) !== ano) return;
       const v = (caixa ? Number(l.valor_pago ?? l.valor) : Number(l.valor)) * (l.tipo === 'Receber' ? 1 : -1);
@@ -1689,7 +2165,7 @@ async function telaDRE(){
       ...['cv','ca','cf','adm','vend'].map(k => lin(DRE_LINHAS.find(x=>x[0]===k)[1], get(k))), lin('= Resultado operacional', ro),
       ...['rfin','dfin','rno','trib'].map(k => lin(DRE_LINHAS.find(x=>x[0]===k)[1], get(k))), lin('= Resultado líquido do período', rliq), lin(DRE_LINHAS.at(-1)[1], get('fora'))];
   };
-  ['da','dreg','dcc','dper'].forEach(id => $('#'+id).onchange = desenhar);
+  ['da','dreg','dcc','dper','dfz'].forEach(id => $('#'+id).onchange = desenhar);
   $('#csv').onclick = () => baixarCSV('DRE ' + $('#da').value, cab, csv);
   desenhar();
 }
