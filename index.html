@@ -837,8 +837,8 @@ async function telaMapa(){
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
     <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo nome">
       <span class="rodape" style="margin:auto 0">Exibir:</span>
-      <label class="chk" style="margin:0"><input type="checkbox" id="ex_nomes"> Nome das áreas</label>
-      <label class="chk" style="margin:0"><input type="checkbox" id="ex_lotes"> Lotes</label></div><div id="mapa"></div>`;
+      <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_nomes" style="width:auto"> Nome das áreas</label>
+      <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_lotes" style="width:auto"> Lotes</label></div><div id="mapa"></div>`;
   { const ex = (() => { try { return JSON.parse(localStorage.getItem('fjk_exibir') || '{}'); } catch(e) { return {}; } })();
     const aplicar = () => { $('#mapa').classList.toggle('sem-nomes', !$('#ex_nomes').checked); $('#mapa').classList.toggle('sem-lotes', !$('#ex_lotes').checked);
       try { localStorage.setItem('fjk_exibir', JSON.stringify({nomes:$('#ex_nomes').checked, lotes:$('#ex_lotes').checked})); } catch(e) {} };
