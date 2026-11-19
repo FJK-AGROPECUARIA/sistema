@@ -178,7 +178,7 @@ async function telaInicio(){
   const {data:lts} = await sb.from('lotes').select('quantidade').eq('fazenda_id', fid);
   const totCab = (lts||[]).reduce((s,l) => s + l.quantidade, 0);
   const nAni = (await sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', fid).eq('ativo', true)).count ?? 0;
-  const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('tipo', t).eq('status', 'Em aberto').lte('vencimento', hojeISO())).count ?? 0;
+  const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('tipo', t).eq('status', 'Em aberto').lt('vencimento', hojeISO())).count ?? 0;
   const [venP, venR] = await Promise.all([venc('Pagar'), venc('Receber')]);
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   $('#corpo').innerHTML = `
@@ -922,7 +922,7 @@ async function carregarFin(forcar){
   return FIN;
 }
 const nomeConta = id => FIN?.contas.find(c => c.id === id)?.nome || '';
-const statusLanc = l => l.status === 'Efetivada' ? (l.tipo === 'Pagar' ? 'Pago' : 'Recebido') : l.status === 'Cancelada' ? 'Cancelada' : (l.vencimento <= hojeISO() ? 'Vencida' : 'Em aberto');
+const statusLanc = l => l.status === 'Efetivada' ? (l.tipo === 'Pagar' ? 'Pago' : 'Recebido') : l.status === 'Cancelada' ? 'Cancelada' : (l.vencimento < hojeISO() ? 'Vencida' : 'Em aberto');
 const corStatus = s => ({Pago:'#e7f3df', Recebido:'#e7f3df', Vencida:'#fde8e6', Cancelada:'#eee'}[s] || '#fff4d6');
 const grupoDoPlano = txt => { const cod = String(txt||'').split(' - ')[0].trim(); const p = FIN.planos.find(x => x.codigo === cod); return p ? p : null; };
 // movimentos que entram no saldo de uma conta
