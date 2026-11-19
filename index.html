@@ -846,7 +846,7 @@ async function telaModulos(){
 
 // ---------- Mapa ----------
 // tamanho da bolinha do lote (padrão, sempre igual)
-function tamBolinha(ls){ const n = ['M','F',null].filter(sx => (ls||[]).some(l => l.quantidade > 0 && (sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')))).length; return 36; }
+function tamBolinha(ls){ return 46; }
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
@@ -869,7 +869,7 @@ async function telaMapa(){
   const modDe = {}, corMod = {}; (ma||[]).forEach(x => { const mm = (mods||[]).find(m => m.id === x.modulo_id); if (mm) { modDe[x.area_id] = mm.nome; if (mm.cor) corMod[x.area_id] = mm.cor; } });
   const porArea = {}; lotes.forEach(l => (porArea[l.area_id] = porArea[l.area_id] || []).push(l));
   const totCab = lotes.reduce((s,l) => s + l.quantidade, 0);
-  $('#mbusca').insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha · toque numa área para ver os lotes e lançar</div>`);
+  $('#mbusca').insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha</div>`);
   const mapa = L.map('mapa', {zoomControl:true});
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mapa);
   const grupo = L.featureGroup().addTo(mapa); const camadas = {};
@@ -912,7 +912,7 @@ async function telaMapa(){
       const f = soma('F'), m = soma('M'), o = soma(null), t = tamBolinha(ls);
       const cor = f && !m && !o ? '#d32f2f' : m && !f && !o ? '#1565c0' : '#616161';
       return L.divIcon({className:'bol-lote', iconSize:[t,t], iconAnchor:[t/2,t/2],
-        html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.55);cursor:grab">${m + f + o}</div>`}); };
+        html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.55);cursor:grab">${m + f + o}</div>`}); };
     Object.values(camadas).forEach(({p, a, ls}) => {
       const cab = ls.reduce((s,l) => s + l.quantidade, 0); if (!cab) return;
       const centro = p.getCenter();
