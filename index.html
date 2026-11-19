@@ -442,6 +442,8 @@ async function editorArea(box, reg, aoMudar){
       <span class="rodape" id="ed_info" style="margin:auto 0 auto auto"></span></div>`;
   const q = s => box.querySelector(s);
   const mapa = L.map(q('#ed_mapa'), {zoomControl:true, doubleClickZoom:false});
+  const g0 = Array.isArray(reg?.geometria) ? reg.geometria.filter(p => isFinite(p[0]) && isFinite(p[1])) : [];
+  if (g0.length > 2) mapa.fitBounds(L.latLngBounds(g0), {padding:[30,30]}); else mapa.setView([-5.5,-48.5], 12);
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:19, attribution:'Esri'}).addTo(mapa);
   // outras áreas da fazenda, só de referência
   const {data:outras} = await sb.from('areas').select('id,codigo,geometria').eq('fazenda_id', E.fazenda.id);
@@ -606,6 +608,8 @@ async function telaModulos(){
     m.querySelector('.caixa').style.maxWidth = '760px';
     const outroMod = {}; (ma||[]).forEach(x => { if (!mod || x.modulo_id !== mod.id) { const mm = (mods||[]).find(z => z.id === x.modulo_id); if (mm) outroMod[x.area_id] = mm.nome; } });
     const mp = L.map(m.querySelector('#mmapa'));
+    { const todos = (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).flatMap(a => a.geometria);
+      if (todos.length) mp.fitBounds(L.latLngBounds(todos), {padding:[10,10]}); else mp.setView([-5.5,-48.5], 12); }
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mp);
     const grp = L.featureGroup().addTo(mp), polis = {};
     const chk = id => m.querySelector(`.lista-areas input[value="${id}"]`);
