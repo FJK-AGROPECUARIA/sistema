@@ -340,7 +340,7 @@ const CAD = {
     colunas:[['nome','Nome'],['sexo','Sexo'],['categoria_oficial','Categoria oficial'],['gmd_projetado','GMD (kg/dia)','n']],
     campos:[['nome','Nome',{obr:1,w:6}],
       ['sexo','Sexo',{w:1,op:['','M','F']}],
-      ['categoria_oficial','Categoria oficial',{obr:1,w:3,op:['Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Fêmeas acima 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos acima 36M']}],
+      ['categoria_oficial','Categoria oficial',{obr:1,w:3,op:['Bezerros(as) mamando','Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Novilhas e Vacas > 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos e Touros > 36M']}],
       ['especie','Espécie',{w:2,op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}],
       ['idade_min_meses','Idade mín. (meses)',{tipo:'number',w:1}],['idade_max_meses','Idade máx. (meses)',{tipo:'number',w:1,dica:'Passou dessa idade, o animal muda para a próxima categoria'}],
       ['proxima_categoria_id','Próxima categoria',{ref:'categorias_manejo',w:2}],
@@ -538,7 +538,7 @@ async function formCadastro(chave, reg){
   // categoria: o sexo filtra a categoria oficial
   const fSexo = m.querySelector('#f_sexo'), fOf = chave === 'categorias' && m.querySelector('#f_categoria_oficial');
   if (fSexo && fOf) { const todas = [...fOf.options].map(o => o.value);
-    const filtra = () => { const sx = fSexo.value, atual = fOf.value, ok = todas.filter(v => !sx || (sx === 'M' ? /^Machos/.test(v) : /^Fêmeas/.test(v)));
+    const filtra = () => { const sx = fSexo.value, atual = fOf.value, ok = todas.filter(v => !sx || /Bezerr/.test(v) || (sx === 'M' ? /Mach|Touro/.test(v) : /Fêm|Novilh|Vaca/.test(v)));
       fOf.innerHTML = ok.map(v => `<option ${v===atual?'selected':''}>${esc(v)}</option>`).join(''); if (!ok.includes(atual)) fOf.value = ok[0] || ''; };
     fSexo.onchange = filtra; filtra(); }
   // produto: campos de vacina só aparecem para Medicamentos e Vacinas
