@@ -852,8 +852,8 @@ function tamBolinha(ls){ return 46; }
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
-    <div class="filtros"><span style="position:relative;flex:none;width:260px;max-width:100%"><input id="mbusca" placeholder="Procurar área" style="width:100%;min-width:0;padding-right:32px">
-      <button id="mlimpa" title="Limpar pesquisa" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;color:var(--cinza);cursor:pointer;padding:2px 6px;display:none">✕</button></span>
+    <div class="filtros"><span style="display:flex;gap:6px;flex:none;width:300px;max-width:100%"><input id="mbusca" placeholder="Procurar área" style="flex:1;min-width:0">
+      <button id="mlimpa" title="Limpar pesquisa" style="flex:none;width:42px;border:0;border-radius:9px;background:var(--vermelho,#d32f2f);color:#fff;font-size:18px;font-weight:700;cursor:pointer;display:none">✕</button></span>
       <span class="rodape" style="margin:auto 0">Exibir:</span>
       <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_nomes" style="width:auto"> Nome das áreas</label>
       <label class="chk" style="margin:0;flex:none;width:auto;gap:5px"><input type="checkbox" id="ex_lotes" style="width:auto"> Lotes</label></div><div id="mapa"></div>`;
