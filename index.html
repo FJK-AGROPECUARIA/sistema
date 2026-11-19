@@ -132,7 +132,7 @@ async function carregarUsuario(){
   const {data:perfil} = await sb.from('perfis').select('*').eq('id', user.id).single();
   E.perfil = perfil;
   const {data:faz} = await sb.from('fazendas').select('*').eq('ativo', true).order('nome');
-  E.fazendas = faz || [];
+  E.fazendas = (faz || []).sort((x,y) => (y.sede_financeiro?1:0) - (x.sede_financeiro?1:0));
   const salva = localStorage.getItem('fjk_fazenda');
   E.fazenda = E.fazendas.find(f => f.id === salva) || E.fazendas[0] || null;
   await carregarPapel();
@@ -169,7 +169,16 @@ function render(){
 }
 function ir(t){ E.tela = t; render(); window.scrollTo(0,0); }
 
+const ehGestao = () => !!E.fazenda?.sede_financeiro;
 async function telaInicio(){
+  const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
+  const sair = `<div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>`;
+  const ligar = () => {
+    document.querySelectorAll('.quad[data-t]').forEach(d => d.onclick = () => ir(d.dataset.t));
+    document.querySelectorAll('.quad[data-faz]').forEach(d => d.onclick = async () => { E.fazenda = E.fazendas.find(f => f.id === d.dataset.faz); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); cacheBase = null; ir('inicio'); });
+    $('#sair').onclick = async () => { await sb.auth.signOut(); E.usuario = null; telaLogin(); };
+  };
+  if (ehGestao()) return telaInicioGestao(q, sair, ligar);
   const fid = E.fazenda.id;
   const cont = async t => (await sb.from(t).select('*', {count:'exact', head:true}).eq('fazenda_id', fid)).count ?? 0;
   const {data:ha} = await sb.from('areas').select('hectares').eq('fazenda_id', fid);
@@ -178,10 +187,7 @@ async function telaInicio(){
   const {data:lts} = await sb.from('lotes').select('quantidade').eq('fazenda_id', fid);
   const totCab = (lts||[]).reduce((s,l) => s + l.quantidade, 0);
   const nAni = (await sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', fid).eq('ativo', true)).count ?? 0;
-  const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('tipo', t).eq('status', 'Em aberto').lt('vencimento', hojeISO())).count ?? 0;
-  const [venP, venR] = await Promise.all([venc('Pagar'), venc('Receber')]);
-  const nNovas = (await sb.from('notas_fiscais').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('status', 'Nova')).count ?? 0;
-  const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
+  const gestao = E.fazendas.find(f => f.sede_financeiro);
   $('#corpo').innerHTML = `
     <div class="secao">Manejo do rebanho</div>
     <div class="grade">${q('mapa','🗺️','Mapa de manejo', fmtNum(totCab,0)+' cab · '+fmtNum(totHa)+' ha')}
@@ -206,6 +212,44 @@ async function telaInicio(){
       ${q('estmov','🔁','Movimentações','Compras, consumo, transferências')}
       ${q('locais','🏚️','Locais de armazenamento','Depósitos, tanques, fábrica')}
     </div>
+    <div class="secao">Cadastros</div>
+    <div class="grade">
+      ${q('areas','▦','Áreas', na+' áreas')}
+      ${q('modulos','◫','Módulos', nm+' módulos')}
+      ${q('retiros','⌂','Retiros', nr+' retiros')}
+      ${q('categorias','🐂','Categorias de manejo', nc+' categorias')}
+      ${q('produtos','📦','Produtos', np+' produtos')}
+    </div>
+    <div class="secao">Outros</div>
+    <div class="grade">
+      ${gestao ? `<div class="quad" data-faz="${gestao.id}"><div class="ic">🏛️</div><b>${esc(gestao.nome)}</b><span>Financeiro, contábil e todas as fazendas</span></div>` : ''}
+      ${sair}
+    </div>`;
+  ligar();
+}
+
+async function telaInicioGestao(q, sair, ligar){
+  const fazendas = E.fazendas.filter(f => !f.sede_financeiro);
+  const fz = E.fazenda.id;
+  const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', fz).eq('tipo', t).eq('status', 'Em aberto').lt('vencimento', hojeISO())).count ?? 0;
+  const [venP, venR, nNovas] = await Promise.all([venc('Pagar'), venc('Receber'),
+    sb.from('notas_fiscais').select('*', {count:'exact', head:true}).eq('fazenda_id', fz).eq('status', 'Nova').then(r => r.count ?? 0)]);
+  const resumo = await Promise.all(fazendas.map(async f => {
+    const [lts, ha, ani, pren] = await Promise.all([
+      todas(() => sb.from('lotes').select('quantidade').eq('fazenda_id', f.id)),
+      todas(() => sb.from('areas').select('hectares').eq('fazenda_id', f.id)),
+      sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', f.id).eq('ativo', true).then(r => r.count ?? 0),
+      sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', f.id).eq('ativo', true).eq('situacao_reprodutiva', 'Prenhe').then(r => r.count ?? 0)]);
+    return {f, cab: lts.reduce((s,l) => s + l.quantidade, 0), ha: ha.reduce((s,a) => s + Number(a.hectares||0), 0), ani, pren};
+  }));
+  const tot = k => resumo.reduce((s,r) => s + r[k], 0);
+  $('#corpo').innerHTML = `
+    <div class="secao">Todas as fazendas</div>
+    <div class="tabela"><table><thead><tr><th>Fazenda</th><th class="num">Cabeças</th><th class="num">Área (ha)</th><th class="num">Lotação (cab/ha)</th><th class="num">Animais com brinco</th><th class="num">Prenhes</th></tr></thead><tbody>
+      ${resumo.map(r => `<tr class="clic" data-faz2="${r.f.id}"><td><b>${esc(r.f.nome)}</b></td><td class="num">${fmtNum(r.cab,0)}</td><td class="num">${fmtNum(r.ha)}</td><td class="num">${r.ha ? fmtNum(r.cab/r.ha,2) : ''}</td><td class="num">${fmtNum(r.ani,0)}</td><td class="num">${fmtNum(r.pren,0)}</td></tr>`).join('')}
+      <tr style="background:#eef2e8;font-weight:700"><td>Total</td><td class="num">${fmtNum(tot('cab'),0)}</td><td class="num">${fmtNum(tot('ha'))}</td><td class="num">${tot('ha') ? fmtNum(tot('cab')/tot('ha'),2) : ''}</td><td class="num">${fmtNum(tot('ani'),0)}</td><td class="num">${fmtNum(tot('pren'),0)}</td></tr>
+    </tbody></table></div>
+    <div class="rodape">Toque numa fazenda para entrar nela.</div>
     <div class="secao">Financeiro</div>
     <div class="grade">
       ${q('finpagar','💸','Contas a pagar', venP ? `<span style="color:var(--vermelho)">${venP} vencidas</span>` : 'Em aberto e pagas')}
@@ -221,22 +265,14 @@ async function telaInicio(){
       ${q('livrocaixa','📒','Livro caixa do produtor','Receitas e despesas por produtor')}
       ${q('dre','📑','DRE','Resultado do exercício')}
     </div>
-    <div class="secao">Cadastros</div>
-    <div class="grade">
-      ${q('areas','▦','Áreas', na+' áreas')}
-      ${q('modulos','◫','Módulos', nm+' módulos')}
-      ${q('retiros','⌂','Retiros', nr+' retiros')}
-      ${q('categorias','🐂','Categorias de manejo', nc+' categorias')}
-      ${q('produtos','📦','Produtos', np+' produtos')}
-    </div>
     <div class="secao">Gestão</div>
     <div class="grade">
-      ${q('fazendas','🏠','Fazendas', E.fazendas.length+' fazendas')}
+      ${q('fazendas','🏠','Fazendas', fazendas.length+' fazendas')}
       ${ehAdmin() ? q('usuarios','👥','Usuários e acessos','Quem usa o sistema') : ''}
-      <div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>
+      ${sair}
     </div>`;
-  document.querySelectorAll('.quad[data-t]').forEach(d => d.onclick = () => ir(d.dataset.t));
-  $('#sair').onclick = async () => { await sb.auth.signOut(); E.usuario = null; telaLogin(); };
+  document.querySelectorAll('tr[data-faz2]').forEach(tr => tr.onclick = async () => { E.fazenda = E.fazendas.find(f => f.id === tr.dataset.faz2); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); cacheBase = null; ir('inicio'); });
+  ligar();
 }
 
 // ---------- Cadastros genéricos ----------
