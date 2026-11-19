@@ -56,6 +56,7 @@ main{padding:14px;max-width:1100px;margin:0 auto}
 .voltar{background:none;border:0;font-size:22px;cursor:pointer;color:var(--verde);padding:4px 8px}
 .filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .filtros input,.filtros select{flex:1;min-width:140px}
+.filtros input[type=checkbox]{flex:none;min-width:0;width:auto}
 input,select,textarea{font:inherit;padding:10px;border:1px solid var(--borda);border-radius:9px;background:#fff;width:100%}
 label{font-size:13px;color:var(--cinza);display:block;margin:10px 0 4px}
 .fgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 10px;align-items:end}
@@ -75,6 +76,8 @@ tr.clic:hover td{background:#f7faf3}
 .caixa{background:#fff;border-radius:16px 16px 0 0;padding:16px 18px;width:100%;max-width:760px;max-height:94vh;overflow:auto}
 .fgrid.auto .fc label{white-space:normal;overflow:visible}
 #mapa.sem-nomes .leaflet-tooltip.rotulo{display:none}
+@keyframes pisca{0%,100%{fill-opacity:.85;stroke-opacity:1}50%{fill-opacity:.25;stroke-opacity:.4}}
+.pisca{animation:pisca 1s ease-in-out infinite}
 .cb{position:relative;min-width:0}.cb-oculto{display:none!important}
 .cb-in{cursor:pointer;padding-right:30px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none'/%3E%3C/svg%3E") no-repeat right 10px center;text-overflow:ellipsis}
 .cb-in::placeholder{color:#222}.cb-in:focus::placeholder{color:#999}.cb-in:disabled{background-color:#f2f2f2;cursor:default}
@@ -836,7 +839,7 @@ async function telaModulos(){
 
 // ---------- Mapa ----------
 // tamanho da bolinha do lote: 1 linha (só M ou só F), 2 ou 3 linhas (misto / sem sexo)
-function tamBolinha(ls){ const n = ['M','F',null].filter(sx => (ls||[]).some(l => l.quantidade > 0 && (sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')))).length; return n <= 1 ? 44 : n === 2 ? 66 : 78; }
+function tamBolinha(ls){ const n = ['M','F',null].filter(sx => (ls||[]).some(l => l.quantidade > 0 && (sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')))).length; return n <= 1 ? 18 : 18 + n * 11; }
 async function telaMapa(){
   const fid = E.fazenda.id;
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
@@ -867,23 +870,38 @@ async function telaMapa(){
     const p = noCentro(L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:corMod[a.id] || a.cor || '#a7c232', fillOpacity:.55}), a.geometria).addTo(grupo);
     p.bindTooltip(cab && !podeEditar() ? `${esc(a.codigo)}<br>${cab}` : esc(a.codigo), {permanent:true, direction:cab && podeEditar() ? 'bottom' : 'center', offset:cab && podeEditar() ? [0, tamBolinha(ls) / 2 + 2] : [0,0], className:'rotulo'});
     p.on('click', () => fichaArea(a, ls, modDe[a.id]));
-    camadas[a.codigo.toLowerCase()] = {p, a, ls};
+    camadas[a.codigo.toLowerCase()] = {p, a, ls, cor:corMod[a.id] || a.cor || '#a7c232'};
   });
+  // pesquisa: lista as áreas com o texto digitado; ao escolher, só aquela fica amarela piscando
+  let marcada = null, listaB = null;
+  const desmarcar = () => { if (marcada) { marcada.p.setStyle({color:'#fff', weight:1.5, fillColor:marcada.cor, fillOpacity:.55}); marcada.p.getElement()?.classList.remove('pisca'); marcada = null; } };
+  const marcar = c => { desmarcar(); marcada = c; c.p.setStyle({color:'#ffeb3b', weight:4, fillColor:'#ffeb3b', fillOpacity:.75}); c.p.bringToFront(); c.p.getElement()?.classList.add('pisca');
+    mapa.fitBounds(c.p.getBounds(), {maxZoom:16, padding:[40,40]}); $('#mbusca').value = c.a.codigo; fecharB(); };
+  const fecharB = () => { if (listaB) { listaB.remove(); listaB = null; } };
+  const achados = () => { const f = semAcento($('#mbusca').value.trim()); return f ? Object.values(camadas).filter(c => semAcento(c.a.codigo + ' ' + (c.a.nome||'')).includes(f)).sort((x,y) => x.a.codigo.localeCompare(y.a.codigo, 'pt', {numeric:true})) : []; };
+  $('#mbusca').oninput = () => { const ls = achados(); fecharB(); if (!ls.length && !$('#mbusca').value.trim()) { desmarcar(); return; }
+    listaB = document.createElement('div'); listaB.className = 'cb-lista'; document.body.appendChild(listaB);
+    const r = $('#mbusca').getBoundingClientRect(); Object.assign(listaB.style, {left:r.left+'px', top:(r.bottom+2)+'px', width:Math.max(r.width,220)+'px', maxHeight:'300px'});
+    listaB.innerHTML = ls.length ? ls.map((c, k) => `<div class="cb-op" data-k="${k}">${esc(c.a.codigo)}${c.ls.length ? ` <span class="rodape">(${c.ls.reduce((s,l)=>s+l.quantidade,0)} cab)</span>` : ''}</div>`).join('') : '<div class="cb-vazio">Nenhuma área</div>';
+    listaB.addEventListener('mousedown', e => e.preventDefault());
+    listaB.onclick = e => { const d = e.target.closest('.cb-op'); if (d) marcar(ls[+d.dataset.k]); }; };
+  $('#mbusca').onblur = () => setTimeout(fecharB, 150);
+  $('#mbusca').onkeydown = e => { if (e.key === 'Enter') { const ls = achados(); if (ls.length) marcar(ls[0]); e.preventDefault(); } else if (e.key === 'Escape') fecharB(); };
   if (grupo.getLayers().length) mapa.fitBounds(grupo.getBounds(), {padding:[10,10]}); else mapa.setView([-5.5,-48.5], 12);
-  $('#mbusca').onchange = e => { const c = camadas[e.target.value.trim().toLowerCase()]; if (c) { mapa.fitBounds(c.p.getBounds()); fichaArea(c.a, c.ls, modDe[c.a.id]); } else aviso('Área não encontrada'); };
   // bolinha arrastavel: arraste o lote ate outro pasto para movimentar
   if (podeEditar()) {
     const dentro = (pt, poly) => { let x = pt.lng, y = pt.lat, ok = false;
       for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const xi = poly[i][1], yi = poly[i][0], xj = poly[j][1], yj = poly[j][0];
         if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ok = !ok; } return ok; };
     // bolinha: vermelha só fêmeas, azul só machos, cinza misturado; F / M / * (sem sexo, ex. bezerro mamando)
+    // etiqueta do lote: vermelha só fêmeas, azul só machos, cinza quando misturado ou com animais sem sexo (*); total em cima
     const icone = ls => { const soma = sx => ls.filter(l => sx ? l.sexo === sx : (l.sexo !== 'M' && l.sexo !== 'F')).reduce((s,l) => s + l.quantidade, 0);
       const f = soma('F'), m = soma('M'), o = soma(null);
-      const cor = f && !m ? '#d32f2f' : m && !f ? '#1565c0' : '#6d6d6d';
-      const lin = [m ? [m + ' M', '#1565c0'] : '', f ? [f + ' F', '#d32f2f'] : '', o ? [o + '*', '#424242'] : ''].filter(Boolean);
-      const t = tamBolinha(ls), caixa = lin.length > 1;
-      return L.divIcon({className:'bol-lote', iconSize:[t,t], iconAnchor:[t/2,t/2],
-        html:`<div style="width:${t}px;height:${t}px;border-radius:50%;background:${cor};border:2px solid #fff;color:#fff;font-size:11px;font-weight:800;line-height:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 1px 5px rgba(0,0,0,.6);cursor:grab;white-space:nowrap">${caixa ? `<span class="bt">${m + f + o}</span>` : ''}${lin.map(([x, c]) => caixa ? `<span class="bq" style="background:${c}">${x}</span>` : `<span>${x}</span>`).join('')}</div>`}); };
+      const cor = f && !m && !o ? '#d32f2f' : m && !f && !o ? '#1565c0' : '#616161';
+      const lin = [m ? m + ' M' : '', f ? f + ' F' : '', o ? o + ' *' : ''].filter(Boolean);
+      const html = lin.length > 1 ? `<b style="font-size:11px">${m + f + o}</b>` + lin.map(x => `<span style="font-size:9px;font-weight:600;opacity:.95">${x}</span>`).join('') : `<b style="font-size:11px">${lin[0]}</b>`;
+      return L.divIcon({className:'bol-lote', iconSize:[0,0], iconAnchor:[0,0],
+        html:`<div style="position:absolute;transform:translate(-50%,-50%);background:${cor};border:1.5px solid #fff;border-radius:6px;color:#fff;padding:2px 5px;line-height:1.15;display:flex;flex-direction:column;align-items:center;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.55);cursor:grab">${html}</div>`}); };
     Object.values(camadas).forEach(({p, a, ls}) => {
       const cab = ls.reduce((s,l) => s + l.quantidade, 0); if (!cab) return;
       const centro = p.getCenter();
@@ -897,7 +915,6 @@ async function telaMapa(){
         formOperacao({operacao:'Movimentação', area_id:a.id, area_destino_id:alvo.a.id});
       });
     });
-    $('#mbusca').insertAdjacentHTML('afterend', '<div class="rodape" style="flex-basis:100%">Toque na bolinha para lançar uma operação no lote, ou arraste para outro pasto para movimentar.</div>');
   }
 }
 
