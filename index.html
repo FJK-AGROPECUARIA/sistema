@@ -17,8 +17,17 @@
 :root{--verde:#2f5d1e;--verde2:#4c8a2b;--lima:#a7c232;--fundo:#f3f5f0;--borda:#dde3d6;--texto:#1f2a1a;--cinza:#6b7565;--vermelho:#b3261e}
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--texto);font-size:15px}
-header{background:#fff;color:var(--verde);padding:6px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1000;border-radius:0 0 18px 18px;box-shadow:0 2px 10px rgba(17,37,61,.10)}
-.logo-fjk{height:clamp(44px,12vw,60px);width:auto;flex:none}
+header{background:#fff;color:var(--verde);padding:6px 14px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;position:sticky;top:0;z-index:1000;border-radius:0 0 18px 18px;box-shadow:0 2px 10px rgba(17,37,61,.10)}
+header .hEsq{display:flex;align-items:center;gap:10px;min-width:0}
+header .hMeio{display:flex;align-items:center;gap:6px;justify-content:center}
+header .hDir{display:flex;align-items:center;gap:6px;justify-content:flex-end}
+header #btGestao,header #btSair{font:inherit;font-size:13px;border-radius:8px;padding:7px 10px;cursor:pointer;white-space:nowrap}
+header #btGestao{background:#fff;color:var(--verde);border:1.5px solid var(--verde);font-weight:600}
+header #btGestao.on{background:var(--verde);color:#fff}
+header select.off{background:#fff;color:var(--verde);border:1.5px solid var(--verde)}
+header #btSair{background:none;border:1px solid var(--borda);color:var(--cinza)}
+.logo-fjk{height:clamp(56px,15vw,84px);width:auto;flex:none}
+@media(max-width:640px){header{grid-template-columns:auto 1fr auto;padding:6px 8px;gap:6px}header .topoTxt{display:none}header .hMeio{flex-wrap:wrap}header #btGestao{font-size:12px;padding:6px 8px}header #btSair{padding:6px 8px}}
 .topoTxt{position:relative;padding-left:12px;display:flex;flex-direction:column;justify-content:center;min-width:0}
 .topoTxt::before{content:'';position:absolute;left:0;top:12%;bottom:12%;width:2px;border-radius:2px;background:var(--lima);opacity:.85}
 .login .logo-fjk{height:90px;display:block;margin:0 auto 10px}
@@ -47,6 +56,10 @@ main{padding:14px;max-width:1100px;margin:0 auto}
 .filtros input,.filtros select{flex:1;min-width:140px}
 input,select,textarea{font:inherit;padding:10px;border:1px solid var(--borda);border-radius:9px;background:#fff;width:100%}
 label{font-size:13px;color:var(--cinza);display:block;margin:10px 0 4px}
+.fgrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0 10px;align-items:end}
+.fgrid .fc{grid-column:span var(--w,3);min-width:0}.fgrid .fc label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fgrid .fsec{grid-column:1/-1;font-size:13px;font-weight:600;color:var(--verde,#4a7a2a);margin-top:14px;border-top:1px solid var(--borda);padding-top:8px}
+@media(max-width:560px){.fgrid .fc[data-w="3"],.fgrid .fc[data-w="4"],.fgrid .fc[data-w="5"]{grid-column:span 6}.fgrid .fc[data-w="2"]{grid-column:span 3}}
 .tabela{background:#fff;border:1px solid var(--borda);border-radius:12px;overflow:auto}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th{background:#eef2e8;text-align:left;padding:9px 10px;font-size:12px;color:var(--cinza);white-space:nowrap;position:sticky;top:0}
@@ -155,13 +168,15 @@ async function carregarPapel(){
 }
 
 function cabecalho(){
+  const gestao = E.fazendas.find(f => f.sede_financeiro), fazs = E.fazendas.filter(f => !f.sede_financeiro), naGestao = !!E.fazenda?.sede_financeiro;
   return `<header>
-    <img class="logo-fjk" src="${LOGO_FJK}" alt="FJK Agropecuária">
-    <div class="topoTxt"><h1>SISTEMA DE GESTÃO</h1><small>${esc(E.perfil?.nome || '')}</small></div>
-    <div class="esp"></div>
-    <span id="filaInd" class="pill" style="display:none;background:#fff4d6;color:#8a5a00" title="Lançamentos guardados sem internet; enviam sozinhos quando o sinal voltar">⏳</span>
-    ${E.fazenda && !E.fazenda.sede_financeiro ? '<button class="btn sec peq" id="btBusca" title="Buscar animal por brinco ou chip" style="margin-right:6px">🔍</button>' : ''}
-    <select id="selFaz">${E.fazendas.map(f => `<option value="${f.id}" ${f.id===E.fazenda?.id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select>
+    <div class="hEsq"><img class="logo-fjk" src="${LOGO_FJK}" alt="FJK Agropecuária">
+      <div class="topoTxt"><h1>SISTEMA DE GESTÃO</h1><small>${esc(E.perfil?.nome || '')}</small></div></div>
+    <div class="hMeio">
+      <select id="selFaz" class="${naGestao ? 'off' : ''}">${naGestao ? '<option value="">Escolher fazenda</option>' : ''}${fazs.map(f => `<option value="${f.id}" ${f.id===E.fazenda?.id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select>
+      ${gestao ? `<button id="btGestao" class="${naGestao ? 'on' : ''}" title="Financeiro, contábil e todas as fazendas">🏛️ ${esc(gestao.nome)}</button>` : ''}</div>
+    <div class="hDir"><span id="filaInd" class="pill" style="display:none;background:#fff4d6;color:#8a5a00" title="Lançamentos guardados sem internet; enviam sozinhos quando o sinal voltar">⏳</span>
+      <button id="btSair" title="Sair (${esc(E.usuario?.email || '')})">⎋ Sair</button></div>
   </header>`;
 }
 
@@ -178,8 +193,11 @@ function render(){
     iatf:telaIATF, gmd:telaGMD, evolucao:telaEvolucao, conciliacao:telaConciliacao, neg_Venda:()=>telaNegocio('Venda'), neg_Abate:()=>telaNegocio('Abate'), neg_Compra:()=>telaNegocio('Compra'), 'neg_Transferência':()=>telaNegocio('Transferência')};
   if (ehGestao() && SO_FAZENDA.includes(E.tela)) E.tela = 'inicio';
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
-  if ($('#btBusca')) $('#btBusca').onclick = buscaRapida; FILA.marca();
-  $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
+  FILA.marca();
+  const trocaFaz = async id => { if (!id) return; E.fazenda = E.fazendas.find(f => f.id === id); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); cacheBase = null; E.tela = 'inicio'; render(); };
+  $('#selFaz').onchange = e => trocaFaz(e.target.value);
+  if ($('#btGestao')) $('#btGestao').onclick = () => trocaFaz(E.fazendas.find(f => f.sede_financeiro).id);
+  $('#btSair').onclick = async () => { if (!confirm('Sair do sistema?')) return; await sb.auth.signOut(); E.usuario = null; telaLogin(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
   (telas[E.tela] || telaInicio)();
 }
@@ -190,11 +208,10 @@ const ehGestao = () => !!E.fazenda?.sede_financeiro;
 const SO_FAZENDA = ['mapa','lancar','estoque','historico','animais','pesagem','manejo','histind','matrizes','lancrep','histrep','estinsumos','estmov','opagri','chuvas','areas','modulos','categorias','produtos','locais','safras','apartacao','importpeso','agendarep','procedimentos','iatf','gmd','evolucao','neg_Venda','neg_Abate','neg_Compra','neg_Transferência'];
 async function telaInicio(){
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
-  const sair = `<div class="quad" id="sair"><div class="ic">⎋</div><b>Sair</b><span>${esc(E.usuario.email)}</span></div>`;
+  const sair = '';
   const ligar = () => {
     document.querySelectorAll('.quad[data-t]').forEach(d => d.onclick = () => ir(d.dataset.t));
     document.querySelectorAll('.quad[data-faz]').forEach(d => d.onclick = async () => { E.fazenda = E.fazendas.find(f => f.id === d.dataset.faz); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); cacheBase = null; ir('inicio'); });
-    $('#sair').onclick = async () => { await sb.auth.signOut(); E.usuario = null; telaLogin(); };
   };
   if (ehGestao()) return telaInicioGestao(q, sair, ligar);
   const fid = E.fazenda.id;
@@ -257,11 +274,7 @@ async function telaInicio(){
       ${q('categorias','🐂','Categorias de manejo', nc+' categorias')}
       ${q('produtos','📦','Produtos', np+' produtos')}
     </div>
-    <div class="secao">Outros</div>
-    <div class="grade">
-      ${gestao ? `<div class="quad" data-faz="${gestao.id}"><div class="ic">🏛️</div><b>${esc(gestao.nome)}</b><span>Financeiro, contábil e todas as fazendas</span></div>` : ''}
-      ${sair}
-    </div>`;
+`;
   ligar();
 }
 
@@ -317,29 +330,32 @@ async function telaInicioGestao(q, sair, ligar){
 
 // ---------- Cadastros genéricos ----------
 const CAD = {
-  areas: {tabela:'areas', titulo:'Áreas', ordem:'codigo', porFazenda:true,
-    colunas:[['codigo','Código'],['nome','Nome'],['hectares','Área (ha)','n'],['tipo_uso','Uso'],['cultura','Culturas']],
-    campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],['hectares','Área (ha)',{tipo:'number'}],
-      ['tipo_uso','Tipo de uso',{op:['Pastagem','Confinamento','Agricultura','Benfeitorias','Reserva / Área de Preservação Permanente','Reserva Legal','Outros']}],
-      ['cultura','Culturas (forragem)'],['cor','Cor no mapa',{tipo:'color'}]],
-    busca:['codigo','nome','cultura'], filtro:['tipo_uso','Tipo de uso']},
-  categorias: {tabela:'categorias_manejo', titulo:'Categorias de manejo', ordem:'codigo', porFazenda:true,
-    colunas:[['codigo','Código'],['nome','Nome'],['categoria_oficial','Categoria oficial'],['sexo','Sexo'],['gmd_projetado','GMD (kg/dia)','n']],
-    campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],
-      ['categoria_oficial','Categoria oficial',{obr:1,op:['Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Fêmeas acima 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos acima 36M']}],
-      ['sexo','Sexo',{op:['','M','F']}],['especie','Espécie',{op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}],
-      ['idade_min_meses','Idade mínima (meses)',{tipo:'number'}],['idade_max_meses','Idade máxima (meses) – passou disso, muda de categoria',{tipo:'number'}],['proxima_categoria_id','Próxima categoria',{ref:'categorias_manejo'}],
-      ['gmd_projetado','GMD para o peso projetado (kg/dia) – ganho por dia dos animais desta categoria',{tipo:'number'}]],
-    busca:['codigo','nome'], filtro:['categoria_oficial','Categoria oficial']},
+  areas: {tabela:'areas', titulo:'Áreas', ordem:'nome', porFazenda:true, codigoIgualNome:true,
+    colunas:[['nome','Nome'],['hectares','Área (ha)','n'],['tipo_uso','Uso'],['cultura','Culturas']],
+    campos:[['nome','Nome',{obr:1,w:4}],['hectares','Área (ha)',{tipo:'number',w:2}],
+      ['tipo_uso','Tipo de uso',{w:3,op:['Pastagem','Confinamento','Agricultura','Benfeitorias','Reserva / Área de Preservação Permanente','Reserva Legal','Outros']}],
+      ['cultura','Cultura (forragem)',{w:2}],['cor','Cor',{tipo:'color',w:1}]],
+    busca:['nome','cultura'], filtro:['tipo_uso','Tipo de uso']},
+  categorias: {tabela:'categorias_manejo', titulo:'Categorias de manejo', ordem:'nome', porFazenda:true, codigoIgualNome:true,
+    colunas:[['nome','Nome'],['sexo','Sexo'],['categoria_oficial','Categoria oficial'],['gmd_projetado','GMD (kg/dia)','n']],
+    campos:[['nome','Nome',{obr:1,w:6}],
+      ['sexo','Sexo',{w:1,op:['','M','F']}],
+      ['categoria_oficial','Categoria oficial',{obr:1,w:3,op:['Fêmeas de 0-12M','Fêmeas de 13-24M','Fêmeas de 25-36M','Fêmeas acima 36M','Machos de 0-12M','Machos de 13-24M','Machos de 25-36M','Machos acima 36M']}],
+      ['especie','Espécie',{w:2,op:['Bovinos','Bubalinos','Equinos','Ovinos','Caprinos']}],
+      ['idade_min_meses','Idade mín. (meses)',{tipo:'number',w:1}],['idade_max_meses','Idade máx. (meses)',{tipo:'number',w:1,dica:'Passou dessa idade, o animal muda para a próxima categoria'}],
+      ['proxima_categoria_id','Próxima categoria',{ref:'categorias_manejo',w:2}],
+      ['gmd_projetado','GMD (kg/dia)',{tipo:'number',w:2,dica:'Ganho por dia dos animais desta categoria, usado no peso projetado'}]],
+    busca:['nome'], filtro:['categoria_oficial','Categoria oficial']},
   produtos: {tabela:'produtos', titulo:'Produtos', ordem:'nome', porFazenda:true,
     colunas:[['nome','Nome'],['unidade','Unidade'],['tipo_uso','Tipo de uso'],['ativo','Situação','b']],
-    campos:[['nome','Nome',{obr:1}],['codigo','Código'],['unidade','Unidade de medida',{op:['kg','L','un','t','g','mL','dose','sc']}],
-      ['tipo_uso','Tipo de uso',{op:['Suplementos e Rações','Medicamentos e Vacinas','Combustíveis e Lubrificantes','Adubos e Fertilizantes','Defensivos','Sementes','Peças e Manutenção','Insumo','Outros']}],
-      ['estoque_minimo','Estoque mínimo (avisa quando ficar abaixo)',{tipo:'number'}],
-      ['dose_animal','Vacinas e medicamentos: dose por animal (na unidade do produto)',{tipo:'number'}],
-      ['carencia_dias','Vacinas e medicamentos: carência para abate (dias)',{tipo:'number'}],
-      ['local_padrao_id','Vacinas e medicamentos: local de onde sai no manejo',{ref:'locais_estoque'}],['ativo','Ativo',{tipo:'bool'}]],
-    busca:['nome','codigo'], filtro:['tipo_uso','Tipo de uso']},
+    campos:[['nome','Nome',{obr:1,w:4}],['unidade','Unidade',{w:2,op:['kg','L','un','t','g','mL','dose','sc']}],
+      ['tipo_uso','Tipo de uso',{w:4,op:['Suplementos e Rações','Medicamentos e Vacinas','Combustíveis e Lubrificantes','Adubos e Fertilizantes','Defensivos','Sementes','Peças e Manutenção','Insumo','Outros']}],
+      ['estoque_minimo','Estoque mínimo',{tipo:'number',w:2,dica:'Avisa quando o estoque ficar abaixo'}],
+      ['#','Vacinas e medicamentos',{sec:'vac'}],
+      ['dose_animal','Dose por animal',{tipo:'number',w:2,dica:'Na unidade do produto'}],
+      ['carencia_dias','Carência (dias)',{tipo:'number',w:1}],
+      ['local_padrao_id','Sai do local (manejo)',{ref:'locais_estoque',w:3}],['ativo','Ativo',{tipo:'bool'}]],
+    busca:['nome'], filtro:['tipo_uso','Tipo de uso']},
   procedimentos: {tabela:'procedimentos', titulo:'Vacinas e procedimentos', ordem:'nome', porFazenda:true,
     colunas:[['nome','Nome'],['produto_id','Produto do estoque','r','produtos'],['dose','Dose por animal','n'],['local_id','Sai do local','r','locais_estoque'],['carencia_dias','Carência (dias)','n']],
     campos:[['nome','Nome (como aparece no manejo)',{obr:1}],['produto_id','Produto do estoque (para dar baixa)',{ref:'produtos'}],['dose','Dose por animal (na unidade do produto)',{tipo:'number'}],
@@ -416,13 +432,19 @@ async function telaCadastro(chave){
   desenhar();
 }
 
+// largura do campo numa grade de 6 colunas (o.w); padrão pelo tipo
+const larguraCampo = o => o.w || (o.tipo === 'bool' ? 6 : o.tipo === 'color' ? 1 : (o.tipo === 'number' || o.tipo === 'date') ? 2 : 3);
+function gradeCampos(campos, reg){
+  return '<div class="fgrid">' + campos.map(c => c[0] === '#' ? `<div class="fsec" data-sec="${esc(c[2]?.sec||'')}">${esc(c[1])}</div>`
+    : `<div class="fc" data-w="${larguraCampo(c[2]||{})}" data-k="${c[0]}" style="--w:${larguraCampo(c[2]||{})}" ${c[2]?.dica ? `title="${esc(c[2].dica)}"` : ''}>${campoHTML(c, reg?.[c[0]])}</div>`).join('') + '</div>';
+}
 function campoHTML([k, rot, o={}], v){
   const val = v ?? '';
   if (o.tipo === 'bool') return `<label class="chk"><input type="checkbox" id="f_${k}" ${v!==false?'checked':''}> ${rot}</label>`;
   if (o.ref) return `<label>${rot}</label><select id="f_${k}"><option value="">—</option>${(refCache[o.ref]||[]).map(r => `<option value="${r.id}" ${r.id===v?'selected':''}>${esc(r.nome)}</option>`).join('')}</select>`;
   if (o.op) { const ops = o.op.includes(val) || val==='' ? o.op : [...o.op, val];
     return `<label>${rot}${o.obr?' *':''}</label><select id="f_${k}">${ops.map(x => `<option ${x===val?'selected':''}>${esc(x)}</option>`).join('')}</select>`; }
-  if (o.tipo === 'color') return `<label>${rot}</label><input id="f_${k}" type="color" value="${esc(val || '#a7c232')}" style="height:44px">`;
+  if (o.tipo === 'color') return `<label>${rot}</label><input id="f_${k}" type="color" value="${esc(val || '#a7c232')}" style="height:42px;width:48px;padding:3px">`;
   return `<label>${rot}${o.obr?' *':''}</label><input id="f_${k}" type="${o.tipo||'text'}" ${o.tipo==='number'?'step="0.01" inputmode="decimal"':''} value="${esc(val)}">`;
 }
 
@@ -503,15 +525,26 @@ async function formCadastro(chave, reg){
   const pode = chave === 'fazendas' ? ehAdmin() : podeEditar();
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="caixa"><h3>${reg ? 'Editar' : 'Novo'} – ${C.titulo}</h3>
-    ${C.campos.map(c => campoHTML(c, reg?.[c[0]])).join('')}
+    ${gradeCampos(C.campos, reg)}
     ${chave === 'areas' ? '<div id="f_editor"></div>' : ''}
     ${reg?.criado_em ? `<div class="rodape">Cadastrado em ${fmtData(reg.criado_em)}</div>` : ''}
     <div class="msg erro" id="ferro" style="display:none"></div>
     <div class="acoes"><button class="btn sec" id="fcan">Cancelar</button>${pode ? '<button class="btn" id="fsal">Salvar</button>' : ''}${reg && ehAdmin() && chave !== 'fazendas' ? '<button class="btn perigo" id="fexc">Excluir</button>' : ''}</div>
     </div>`;
   document.body.appendChild(m);
+  if (C.campos.length > 3) m.querySelector('.caixa').style.maxWidth = '680px';
   if (!pode) m.querySelectorAll('input,select').forEach(i => i.disabled = true);
   m.querySelector('#fcan').onclick = () => m.remove();
+  // categoria: o sexo filtra a categoria oficial
+  const fSexo = m.querySelector('#f_sexo'), fOf = chave === 'categorias' && m.querySelector('#f_categoria_oficial');
+  if (fSexo && fOf) { const todas = [...fOf.options].map(o => o.value);
+    const filtra = () => { const sx = fSexo.value, atual = fOf.value, ok = todas.filter(v => !sx || (sx === 'M' ? /^Machos/.test(v) : /^Fêmeas/.test(v)));
+      fOf.innerHTML = ok.map(v => `<option ${v===atual?'selected':''}>${esc(v)}</option>`).join(''); if (!ok.includes(atual)) fOf.value = ok[0] || ''; };
+    fSexo.onchange = filtra; filtra(); }
+  // produto: campos de vacina só aparecem para Medicamentos e Vacinas
+  const fUso = chave === 'produtos' && m.querySelector('#f_tipo_uso');
+  if (fUso) { const vac = () => { const v = fUso.value === 'Medicamentos e Vacinas'; m.querySelectorAll('[data-sec="vac"], .fc[data-k="dose_animal"], .fc[data-k="carencia_dias"], .fc[data-k="local_padrao_id"]').forEach(e => e.style.display = v ? '' : 'none'); };
+    fUso.addEventListener('change', vac); vac(); }
   if (chave !== 'areas') m.onclick = e => { if (e.target === m) m.remove(); };
   let pegaDesenho = null;
   if (chave === 'areas') {
@@ -525,6 +558,7 @@ async function formCadastro(chave, reg){
   if (pode) m.querySelector('#fsal').onclick = async () => {
     const obj = {};
     for (const [k, rot, o={}] of C.campos) {
+      if (k === '#') continue;
       const el = m.querySelector('#f_'+k);
       let v = o.tipo === 'bool' ? el.checked : el.value.trim();
       if (o.tipo === 'number') v = v === '' ? 0 : Number(v.replace(',', '.'));
@@ -533,6 +567,7 @@ async function formCadastro(chave, reg){
       obj[k] = v;
     }
     if (C.porFazenda) obj.fazenda_id = fazCad(C);
+    if (C.codigoIgualNome) obj.codigo = obj.nome;
     if (pegaDesenho) { const pts = pegaDesenho(); if (pts.length > 0 && pts.length < 3) return erro('O desenho precisa de pelo menos 3 pontos (ou limpe o desenho)');
       obj.geometria = pts.length ? pts.map(p => [Math.round(p[0]*1e7)/1e7, Math.round(p[1]*1e7)/1e7]) : null; }
     if (C.fin) FIN = null; cacheBase = null;
