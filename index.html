@@ -157,7 +157,8 @@ function cabecalho(){
 function render(){
   if (!E.usuario) return telaLogin();
   const telas = {inicio:telaInicio, mapa:telaMapa, areas:()=>telaCadastro('areas'), modulos:telaModulos, retiros:()=>telaCadastro('retiros'),
-    categorias:()=>telaCadastro('categorias'), produtos:()=>telaCadastro('produtos'), fazendas:()=>telaCadastro('fazendas'), usuarios:telaUsuarios};
+    categorias:()=>telaCadastro('categorias'), produtos:()=>telaCadastro('produtos'), fazendas:()=>telaCadastro('fazendas'), usuarios:telaUsuarios,
+    lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico};
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -171,10 +172,15 @@ async function telaInicio(){
   const {data:ha} = await sb.from('areas').select('hectares').eq('fazenda_id', fid);
   const totHa = (ha||[]).reduce((s,a) => s + Number(a.hectares||0), 0);
   const [na, nm, nc, np, nr] = await Promise.all(['areas','modulos','categorias_manejo','produtos','retiros'].map(cont));
+  const {data:lts} = await sb.from('lotes').select('quantidade').eq('fazenda_id', fid);
+  const totCab = (lts||[]).reduce((s,l) => s + l.quantidade, 0);
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   $('#corpo').innerHTML = `
-    <div class="secao">Manejo</div>
-    <div class="grade">${q('mapa','🗺️','Mapa da fazenda', fmtNum(totHa)+' ha')}</div>
+    <div class="secao">Manejo do rebanho</div>
+    <div class="grade">${q('mapa','🗺️','Mapa de manejo', fmtNum(totCab,0)+' cab · '+fmtNum(totHa)+' ha')}
+      ${q('lancar','➕','Lançar operação','Movimentação, morte, nascimento...')}
+      ${q('estoque','🐄','Estoque do rebanho', fmtNum(totCab,0)+' cabeças')}
+      ${q('historico','📋','Histórico de operações','Tudo que foi lançado')}</div>
     <div class="secao">Cadastros</div>
     <div class="grade">
       ${q('areas','▦','Áreas', na+' áreas')}
@@ -278,7 +284,7 @@ function formCadastro(chave, reg){
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="caixa"><h3>${reg ? 'Editar' : 'Novo'} – ${C.titulo}</h3>
     ${C.campos.map(c => campoHTML(c, reg?.[c[0]])).join('')}
-    ${reg?.criado_em ? `<div class="rodape">Cadastrado em ${fmtData(reg.criado_em)}${reg.agrohub_id ? ' · veio do AgroHUB' : ''}</div>` : ''}
+    ${reg?.criado_em ? `<div class="rodape">Cadastrado em ${fmtData(reg.criado_em)}${reg.id_origem ? ' · importado do sistema anterior' : ''}</div>` : ''}
     <div class="msg erro" id="ferro" style="display:none"></div>
     <div class="acoes"><button class="btn sec" id="fcan">Cancelar</button>${pode ? '<button class="btn" id="fsal">Salvar</button>' : ''}</div>
     ${reg && ehAdmin() && chave !== 'fazendas' ? '<div class="acoes"><button class="btn perigo" id="fexc">Excluir</button></div>' : ''}</div>`;
@@ -389,22 +395,195 @@ async function telaMapa(){
   $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Mapa – ${esc(E.fazenda.nome)}</h2></div>
     <div class="filtros"><input id="mbusca" placeholder="Procurar área pelo código"></div><div id="mapa"></div>`;
   $('#volta').onclick = () => ir('inicio');
-  const [{data:areas}, {data:mods}, {data:ma}] = await Promise.all([
+  const [{data:areas}, {data:mods}, {data:ma}, lotes] = await Promise.all([
     sb.from('areas').select('*').eq('fazenda_id', fid),
     sb.from('modulos').select('id,nome').eq('fazenda_id', fid),
-    sb.from('modulo_areas').select('modulo_id,area_id')]);
+    sb.from('modulo_areas').select('modulo_id,area_id'),
+    carregarLotes()]);
   const modDe = {}; (ma||[]).forEach(x => { const mm = (mods||[]).find(m => m.id === x.modulo_id); if (mm) modDe[x.area_id] = mm.nome; });
+  const porArea = {}; lotes.forEach(l => (porArea[l.area_id] = porArea[l.area_id] || []).push(l));
+  const totCab = lotes.reduce((s,l) => s + l.quantidade, 0);
+  $('#mbusca').insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha · toque numa área para ver os lotes e lançar</div>`);
   const mapa = L.map('mapa', {zoomControl:true});
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'Esri'}).addTo(mapa);
   const grupo = L.featureGroup().addTo(mapa); const camadas = {};
   (areas||[]).filter(a => Array.isArray(a.geometria) && a.geometria.length > 2).forEach(a => {
-    const p = L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:a.cor || '#a7c232', fillOpacity:.55}).addTo(grupo);
-    p.bindTooltip(esc(a.codigo), {permanent:true, direction:'center', className:'rotulo'});
-    p.bindPopup(`<b>${esc(a.codigo)}</b>${a.nome!==a.codigo?'<br>'+esc(a.nome):''}<br>${fmtNum(a.hectares)} ha · ${esc(a.tipo_uso)}${a.cultura?'<br>Forragem: '+esc(a.cultura):''}${modDe[a.id]?'<br>Módulo: '+esc(modDe[a.id]):''}`);
-    camadas[a.codigo.toLowerCase()] = p;
+    const ls = porArea[a.id] || []; const cab = ls.reduce((s,l) => s + l.quantidade, 0);
+    const p = L.polygon(a.geometria, {color:'#fff', weight:1.5, fillColor:a.cor || '#a7c232', fillOpacity: cab ? .65 : .3}).addTo(grupo);
+    p.bindTooltip(cab ? `${esc(a.codigo)}<br>${cab}` : esc(a.codigo), {permanent:true, direction:'center', className:'rotulo'});
+    p.on('click', () => fichaArea(a, ls, modDe[a.id]));
+    camadas[a.codigo.toLowerCase()] = {p, a, ls};
   });
   if (grupo.getLayers().length) mapa.fitBounds(grupo.getBounds(), {padding:[10,10]}); else mapa.setView([-5.5,-48.5], 12);
-  $('#mbusca').onchange = e => { const p = camadas[e.target.value.trim().toLowerCase()]; if (p) { mapa.fitBounds(p.getBounds()); p.openPopup(); } else aviso('Área não encontrada'); };
+  $('#mbusca').onchange = e => { const c = camadas[e.target.value.trim().toLowerCase()]; if (c) { mapa.fitBounds(c.p.getBounds()); fichaArea(c.a, c.ls, modDe[c.a.id]); } else aviso('Área não encontrada'); };
+}
+
+// ---------- Rebanho ----------
+const OPS = {
+  'Movimentação':{t:'Interna', destino:'area'}, 'Mudança de categoria':{t:'Interna', destino:'cat'}, 'Pesagem':{t:'Interna', peso:1},
+  'Morte':{t:'Saída', causa:1}, 'Nascimento':{t:'Entrada'}, 'Compra':{t:'Entrada'}, 'Venda':{t:'Saída'}, 'Abate para consumo':{t:'Saída'},
+  'Transferência entre fazendas - Entrada':{t:'Entrada'}, 'Transferência entre fazendas - Saída':{t:'Saída'},
+  'Ajuste de estoque - Entrada':{t:'Entrada'}, 'Ajuste de estoque - Saída':{t:'Saída'}};
+const CAUSAS = ['Fraqueza','Doença','Picada de cobra','Acidente','Raio','Parto','Timpanismo','Intoxicação','Desconhecida','Outra'];
+async function carregarLotes(){
+  const {data} = await sb.from('lotes').select('*, areas(codigo,nome), categorias_manejo(codigo,nome,sexo,categoria_oficial)').eq('fazenda_id', E.fazenda.id);
+  return (data||[]).map(l => ({...l, area_codigo:l.areas?.codigo, cat_nome:l.categorias_manejo?.nome, sexo:l.categorias_manejo?.sexo, cat_oficial:l.categorias_manejo?.categoria_oficial}));
+}
+const diasDesde = d => d ? Math.floor((Date.now() - new Date(d+'T12:00:00')) / 864e5) : null;
+const hojeISO = () => { const d = new Date(Date.now() - 3*3600e3); return d.toISOString().slice(0,10); };
+
+function fichaArea(a, ls, modulo){
+  const cab = ls.reduce((s,l) => s + l.quantidade, 0);
+  const kg = ls.reduce((s,l) => s + l.quantidade*Number(l.peso_medio||0), 0);
+  const ua = kg / 450;
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${esc(a.codigo)}${a.nome!==a.codigo?' – '+esc(a.nome):''}</h3>
+    <div class="rodape" style="margin-top:0">${fmtNum(a.hectares)} ha · ${esc(a.tipo_uso)}${a.cultura?' · '+esc(a.cultura):''}${modulo?' · Módulo '+esc(modulo):''}</div>
+    <div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0">
+      <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${fmtNum(cab,0)}</b><span>cabeças</span></div>
+      <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${cab?fmtNum(kg/cab,0):'–'}</b><span>kg médio</span></div>
+      <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${a.hectares>0?fmtNum(ua/a.hectares,1):'–'}</b><span>UA/ha</span></div></div>
+    <div class="tabela"><table><thead><tr><th>Categoria</th><th class="num">Cab</th><th class="num">Peso (kg)</th><th>Entrada</th></tr></thead><tbody>
+    ${ls.map(l => `<tr><td>${esc(l.cat_nome)}</td><td class="num">${l.quantidade}</td><td class="num">${fmtNum(l.peso_medio,0)}${l.tipo_peso==='Projetado'?'*':''}</td><td>${fmtData(l.data_entrada)}${l.data_entrada?' ('+diasDesde(l.data_entrada)+'d)':''}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Área vazia</td></tr>'}
+    </tbody></table></div>
+    ${ls.some(l=>l.tipo_peso==='Projetado')?'<div class="rodape">* peso projetado</div>':''}
+    ${podeEditar() ? `<div class="secao">Lançar nesta área</div><div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px">
+      ${['Movimentação','Morte','Nascimento','Mudança de categoria','Pesagem','Abate para consumo'].map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:54px">${o}</button>`).join('')}</div>` : ''}
+    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#fch').onclick = () => m.remove();
+  m.onclick = e => { if (e.target === m) m.remove(); };
+  m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formOperacao({operacao:b.dataset.op, area_id:a.id}); });
+}
+
+async function formOperacao(pre){
+  const fid = E.fazenda.id;
+  const [{data:areas}, {data:cats}, lotes] = await Promise.all([
+    sb.from('areas').select('id,codigo').eq('fazenda_id', fid).eq('ativo', true).order('codigo'),
+    sb.from('categorias_manejo').select('id,codigo,nome').eq('fazenda_id', fid).eq('ativo', true).order('nome'),
+    carregarLotes()]);
+  const optA = (sel) => `<option value="">— escolha —</option>` + (areas||[]).map(a => `<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.codigo)}</option>`).join('');
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Lançar operação</h3>
+    <label>Operação *</label><select id="o_op">${Object.keys(OPS).map(o => `<option ${o===(pre.operacao||'Movimentação')?'selected':''}>${o}</option>`).join('')}</select>
+    <label>Data *</label><input id="o_data" type="date" value="${hojeISO()}" max="${hojeISO()}">
+    <label id="l_area">Área *</label><select id="o_area">${optA(pre.area_id)}</select>
+    <label>Categoria *</label><select id="o_cat"></select>
+    <div id="b_dest"><label>Área de destino *</label><select id="o_area2">${optA()}</select></div>
+    <div id="b_cat2"><label>Nova categoria *</label><select id="o_cat2"><option value="">— escolha —</option>${(cats||[]).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    <div id="b_qtd"><label>Quantidade de cabeças *</label><input id="o_q" type="number" inputmode="numeric" min="1"></div>
+    <label id="l_peso">Peso médio (kg)</label><input id="o_peso" type="number" inputmode="decimal" step="0.1">
+    <div id="b_causa"><label>Causa da morte</label><select id="o_causa">${CAUSAS.map(c => `<option>${c}</option>`).join('')}</select></div>
+    <label>Observação</label><input id="o_obs">
+    <div class="msg erro" id="o_erro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="o_can">Cancelar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
+  document.body.appendChild(m);
+  const g = id => m.querySelector('#'+id);
+  const atualizar = () => {
+    const op = g('o_op').value, cfg = OPS[op], a = g('o_area').value;
+    const naArea = lotes.filter(l => l.area_id === a);
+    const lista = cfg.t === 'Entrada' ? (cats||[]).map(c => ({id:c.id, txt:c.nome}))
+      : naArea.map(l => ({id:l.categoria_id, txt:`${l.cat_nome} (${l.quantidade} cab)`}));
+    const atual = g('o_cat').value;
+    g('o_cat').innerHTML = (lista.length ? '<option value="">— escolha —</option>' : `<option value="">${a ? 'Área sem gado' : 'Escolha a área'}</option>`) + lista.map(x => `<option value="${x.id}" ${x.id===atual?'selected':''}>${esc(x.txt)}</option>`).join('');
+    if (lista.length === 1) g('o_cat').value = lista[0].id;
+    g('b_dest').style.display = cfg.destino === 'area' ? '' : 'none';
+    g('b_cat2').style.display = cfg.destino === 'cat' ? '' : 'none';
+    g('b_causa').style.display = cfg.causa ? '' : 'none';
+    g('b_qtd').style.display = cfg.peso ? 'none' : '';
+    g('l_peso').textContent = cfg.peso ? 'Peso médio (kg) *' : 'Peso médio (kg)';
+    g('l_area').textContent = cfg.destino === 'area' ? 'Área de origem *' : 'Área *';
+  };
+  const preencher = () => { const l = lotes.find(x => x.area_id === g('o_area').value && x.categoria_id === g('o_cat').value);
+    if (l && OPS[g('o_op').value].t !== 'Entrada') { if (!g('o_q').value) g('o_q').placeholder = 'até ' + l.quantidade; if (!g('o_peso').value && l.peso_medio) g('o_peso').placeholder = fmtNum(l.peso_medio,0) + ' (atual)'; } };
+  g('o_op').onchange = () => { atualizar(); preencher(); }; g('o_area').onchange = () => { atualizar(); preencher(); }; g('o_cat').onchange = preencher;
+  atualizar(); preencher();
+  g('o_can').onclick = () => m.remove();
+  g('o_sal').onclick = async () => {
+    const erro = t => { g('o_erro').textContent = t; g('o_erro').style.display = 'block'; };
+    const op = g('o_op').value, cfg = OPS[op];
+    const p = {fazenda_id:fid, operacao:op, data:g('o_data').value, area_id:g('o_area').value, categoria_id:g('o_cat').value,
+      area_destino_id: cfg.destino==='area' ? g('o_area2').value : '', categoria_destino_id: cfg.destino==='cat' ? g('o_cat2').value : '',
+      quantidade: cfg.peso ? null : parseInt(g('o_q').value || '0'), peso_medio: g('o_peso').value.replace(',','.'),
+      causa_morte: cfg.causa ? g('o_causa').value : '', observacao: g('o_obs').value.trim()};
+    if (!p.data) return erro('Informe a data');
+    if (!p.area_id) return erro('Escolha a área');
+    if (!p.categoria_id) return erro('Escolha a categoria');
+    if (!cfg.peso && !(p.quantidade > 0)) return erro('Informe a quantidade de cabeças');
+    g('o_sal').disabled = true;
+    const r = await sb.rpc('lancar_operacao', {p});
+    g('o_sal').disabled = false;
+    if (r.error) return erro(r.error.message.replace(/^.*?: /,''));
+    m.remove(); aviso(`${op} lançada`);
+    if (['mapa','estoque','historico','inicio'].includes(E.tela)) render();
+  };
+}
+
+async function telaEstoque(){
+  const lotes = await carregarLotes();
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Estoque do rebanho</h2>
+      <button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="ver"><option value="cat">Por categoria</option><option value="area">Por área</option><option value="lote">Lote a lote</option></select>
+      <input id="busca" placeholder="Pesquisar"></div>
+    <div class="tabela"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div><div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  const agrupar = (chave, nome) => { const g = {}; lotes.forEach(l => { const k = l[chave]; g[k] = g[k] || {nome:l[nome], cab:0, kg:0, lotes:0}; g[k].cab += l.quantidade; g[k].kg += l.quantidade*Number(l.peso_medio||0); g[k].lotes++; }); return Object.values(g).sort((a,b) => b.cab - a.cab); };
+  let linhasCSV = [], cabCSV = [];
+  const desenhar = () => {
+    const v = $('#ver').value, b = $('#busca').value.toLowerCase();
+    let cab, rows;
+    if (v === 'lote') {
+      cab = ['Área','Categoria','Cab','Peso médio (kg)','Entrada'];
+      rows = lotes.filter(l => !b || (l.area_codigo+' '+l.cat_nome).toLowerCase().includes(b)).sort((x,y) => x.area_codigo.localeCompare(y.area_codigo))
+        .map(l => [l.area_codigo, l.cat_nome, l.quantidade, fmtNum(l.peso_medio,0), fmtData(l.data_entrada)]);
+    } else {
+      const gs = v === 'cat' ? agrupar('categoria_id','cat_nome') : agrupar('area_id','area_codigo');
+      cab = [v==='cat'?'Categoria':'Área','Cab','Peso médio (kg)','Total (@)', v==='cat'?'Áreas':'Lotes'];
+      rows = gs.filter(x => !b || String(x.nome).toLowerCase().includes(b)).map(x => [x.nome, x.cab, fmtNum(x.cab?x.kg/x.cab:0,0), fmtNum(x.kg/30,0), x.lotes]);
+    }
+    const num = i => typeof rows[0]?.[i] === 'number' || /Cab|Peso|@|Lotes|Áreas/.test(cab[i]);
+    $('#th').innerHTML = '<tr>' + cab.map((c,i) => `<th class="${num(i)&&i>0?'num':''}">${c}</th>`).join('') + '</tr>';
+    $('#tb').innerHTML = rows.map(r => '<tr>' + r.map((c,i) => `<td class="${num(i)&&i>0?'num':''}">${esc(typeof c==='number'?fmtNum(c,0):c)}</td>`).join('') + '</tr>').join('') || `<tr><td colspan="${cab.length}" class="vazio">Sem gado</td></tr>`;
+    const tot = lotes.reduce((s,l) => s + l.quantidade, 0), kg = lotes.reduce((s,l) => s + l.quantidade*Number(l.peso_medio||0), 0);
+    $('#rod').innerHTML = `Total: <b>${fmtNum(tot,0)} cabeças</b> · peso médio ${fmtNum(tot?kg/tot:0,0)} kg · ${fmtNum(kg/30,0)} @ (peso vivo)`;
+    linhasCSV = rows; cabCSV = cab;
+  };
+  $('#ver').onchange = desenhar; $('#busca').oninput = desenhar;
+  $('#csv').onclick = () => baixarCSV('Estoque do rebanho', cabCSV, linhasCSV);
+  desenhar();
+}
+
+async function telaHistorico(){
+  const fim = hojeISO(), ini = new Date(Date.now() - 33*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `<div class="topo"><button class="voltar" id="volta">←</button><h2>Histórico de operações</h2>
+      <button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><input id="h_ini" type="date" value="${ini}"><input id="h_fim" type="date" value="${fim}">
+      <select id="h_op"><option value="">Todas as operações</option>${[...Object.keys(OPS),'Apartação - Entrada','Apartação - Saída','Cadastro','Exclusão'].map(o => `<option>${o}</option>`).join('')}</select>
+      <input id="h_busca" placeholder="Área ou categoria"><button class="btn" id="h_ver">Visualizar</button></div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th>Área</th><th>Categoria</th><th class="num">Cab</th><th class="num">Peso (kg)</th><th>Detalhe</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let rows = [];
+  const buscar = async () => {
+    $('#tb').innerHTML = '<tr><td colspan="7" class="vazio">Carregando...</td></tr>';
+    let q = sb.from('operacoes_rebanho').select('*').eq('fazenda_id', E.fazenda.id).gte('data', $('#h_ini').value).lte('data', $('#h_fim').value)
+      .order('data', {ascending:false}).order('criado_em', {ascending:false}).limit(5000);
+    if ($('#h_op').value) q = q.eq('operacao', $('#h_op').value);
+    const {data, error} = await q;
+    if (error) { $('#tb').innerHTML = `<tr><td colspan="7" class="vazio">${esc(error.message)}</td></tr>`; return; }
+    const b = $('#h_busca').value.toLowerCase();
+    rows = (data||[]).filter(o => !b || [o.area_codigo,o.area_destino_codigo,o.categoria_nome,o.categoria_destino_nome].join(' ').toLowerCase().includes(b));
+    const det = o => o.operacao==='Movimentação' ? '→ ' + (o.area_destino_codigo||'') : o.operacao==='Mudança de categoria' ? '→ ' + (o.categoria_destino_nome||'') : (o.causa_morte || o.observacao || '');
+    $('#tb').innerHTML = rows.map(o => `<tr><td>${fmtData(o.data+'T12:00:00')}</td><td>${esc(o.operacao)}</td><td>${esc(o.area_codigo)}</td><td>${esc(o.categoria_nome)}</td>
+      <td class="num">${o.quantidade}</td><td class="num">${fmtNum(o.peso_medio,0)}</td><td>${esc(det(o))}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhuma operação no período</td></tr>';
+    const ent = rows.filter(o => o.tipo==='Entrada').reduce((s,o) => s+o.quantidade, 0), sai = rows.filter(o => o.tipo==='Saída').reduce((s,o) => s+o.quantidade, 0);
+    $('#rod').innerHTML = `${rows.length} operações · entradas <b>${fmtNum(ent,0)}</b> cab · saídas <b>${fmtNum(sai,0)}</b> cab`;
+    rows.det = det;
+  };
+  $('#h_ver').onclick = buscar;
+  $('#csv').onclick = () => baixarCSV('Histórico de operações', ['Data','Operação','Tipo','Área','Categoria','Cab','Peso médio (kg)','Detalhe'],
+    rows.map(o => [fmtData(o.data+'T12:00:00'), o.operacao, o.tipo, o.area_codigo, o.categoria_nome, o.quantidade, fmtNum(o.peso_medio,0), rows.det(o)]));
+  buscar();
 }
 
 // ---------- Usuários ----------
