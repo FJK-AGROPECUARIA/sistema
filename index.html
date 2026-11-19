@@ -968,12 +968,13 @@ function fichaArea(a, ls, modulo){
 
 async function formOperacao(pre){
   const fid = E.fazenda.id;
-  const [{data:areas}, {data:cats}, lotes] = await Promise.all([
+  let [{data:areas}, {data:cats}, lotes] = await Promise.all([
     sb.from('areas').select('id,codigo').eq('fazenda_id', fid).eq('ativo', true).order('codigo'),
     sb.from('categorias_manejo').select('id,codigo,nome').eq('fazenda_id', fid).eq('ativo', true).order('nome'),
     carregarLotes()]);
   const optA = (sel) => `<option value="">— escolha —</option>` + (areas||[]).map(a => `<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.codigo)}</option>`).join('');
   const m = document.createElement('div'); m.className = 'modal';
+  let mudou = false;
   m.innerHTML = `<div class="caixa"><h3>Lançar operação</h3>
     <label>Operação *</label><select id="o_op">${pre.escolher ? '<option value="">— escolha a operação —</option>' : ''}${Object.keys(OPS).filter(o => !['Venda','Compra','Transferência entre fazendas - Entrada','Transferência entre fazendas - Saída'].includes(o) || o === pre.operacao).map(o => `<option ${!pre.escolher && o===(pre.operacao||'Movimentação')?'selected':''}>${o}</option>`).join('')}</select>
     <label>Data *</label><input id="o_data" type="date" value="${hojeISO()}" max="${hojeISO()}">
@@ -989,7 +990,8 @@ async function formOperacao(pre){
     <label>Observação</label><input id="o_obs">
     <div id="o_dica" class="msg" style="display:none;background:#eef2e8"></div>
     <div class="msg erro" id="o_erro" style="display:none"></div>
-    <div class="acoes"><button class="btn sec" id="o_can">Cancelar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
+    <div class="msg" id="o_okmsg" style="display:none;background:#e3f3d8;color:#2f5d1e;font-weight:700"></div>
+    <div class="acoes"><button class="btn sec" id="o_can">Fechar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
   document.body.appendChild(m);
   const g = id => m.querySelector('#'+id);
   let linhas = [];
@@ -1033,8 +1035,9 @@ async function formOperacao(pre){
   g('o_op').onchange = atualizar; g('o_area').onchange = atualizar;
   g('o_todas').onchange = e => { m.querySelectorAll('#o_cats .c_ck').forEach(c => c.checked = e.target.checked); total(); };
   atualizar();
-  g('o_can').onclick = () => m.remove();
+  g('o_can').onclick = () => { m.remove(); if (mudou && ['mapa','estoque','historico','inicio'].includes(E.tela)) render(); };
   g('o_sal').onclick = async () => {
+    g('o_okmsg').style.display = 'none'; g('o_erro').style.display = 'none';
     const erro = t => { g('o_erro').textContent = t; g('o_erro').style.display = 'block'; };
     const op = g('o_op').value, cfg = OPS[op], data = g('o_data').value, area_id = g('o_area').value;
     if (!cfg) return erro('Escolha a operação');
@@ -1066,9 +1069,12 @@ async function formOperacao(pre){
     const falhas = [];
     for (const b of brincos) { const r = await sb.rpc('lancar_individual', {p:{animal_id:b.an.id, operacao:'Morte', data, peso:'', causa_morte:g('o_causa').value, observacao:g('o_obs').value.trim()}});
       if (r.error) falhas.push(`${b.cod}: ${r.error.message.replace(/^.*?: /,'')}`); }
-    m.remove(); aviso(`${op} lançada (${feitas.length} categoria${feitas.length > 1 ? 's' : ''})` + (brincos.length ? ` · ${brincos.length - falhas.length} brinco(s) baixado(s)` : ''));
+    // continua na mesma tela para outra operação; atualiza as quantidades do lote
+    mudou = true; g('o_sal').disabled = false;
+    const txt = `✔ Operação concluída: ${op} (${feitas.join(', ')})` + (brincos.length ? ` · ${brincos.length - falhas.length} brinco(s) baixado(s)` : '');
+    g('o_okmsg').textContent = txt; g('o_okmsg').style.display = 'block'; aviso('Operação concluída');
     if (falhas.length) alertaLista('Brincos não baixados', falhas);
-    if (['mapa','estoque','historico','inicio'].includes(E.tela)) render();
+    lotes = await carregarLotes(); g('o_obs').value = ''; montar();
   };
 }
 
