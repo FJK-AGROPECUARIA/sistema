@@ -159,7 +159,9 @@ function render(){
   const telas = {inicio:telaInicio, mapa:telaMapa, areas:()=>telaCadastro('areas'), modulos:telaModulos, retiros:()=>telaCadastro('retiros'),
     categorias:()=>telaCadastro('categorias'), produtos:()=>telaCadastro('produtos'), fazendas:()=>telaCadastro('fazendas'), usuarios:telaUsuarios,
     lancar:()=>{ telaInicio(); formOperacao({}); }, estoque:telaEstoque, historico:telaHistorico,
-    animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual};
+    animais:telaAnimais, pesagem:telaPesagemSeq, histind:telaHistIndividual,
+    finpagar:()=>telaContasFin('Pagar'), finreceber:()=>telaContasFin('Receber'), finsaldos:telaSaldos, finextrato:telaExtrato, finfluxo:telaFluxo,
+    fincontas:()=>telaCadastro('fincontas'), fincentros:()=>telaCadastro('fincentros'), finplano:()=>telaCadastro('finplano')};
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   $('#selFaz').onchange = async e => { E.fazenda = E.fazendas.find(f => f.id === e.target.value); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); render(); };
   if (!E.fazenda && E.tela !== 'fazendas') { $('#corpo').innerHTML = '<div class="vazio">Você ainda não tem acesso a nenhuma fazenda. Peça para o administrador liberar o seu email.</div>'; return; }
@@ -176,6 +178,8 @@ async function telaInicio(){
   const {data:lts} = await sb.from('lotes').select('quantidade').eq('fazenda_id', fid);
   const totCab = (lts||[]).reduce((s,l) => s + l.quantidade, 0);
   const nAni = (await sb.from('animais').select('*', {count:'exact', head:true}).eq('fazenda_id', fid).eq('ativo', true)).count ?? 0;
+  const venc = async t => (await sb.from('lancamentos_financeiros').select('*', {count:'exact', head:true}).eq('fazenda_id', finFaz()).eq('tipo', t).eq('status', 'Em aberto').lt('vencimento', hojeISO())).count ?? 0;
+  const [venP, venR] = await Promise.all([venc('Pagar'), venc('Receber')]);
   const q = (id, ic, nome, sub) => `<div class="quad" data-t="${id}"><div class="ic">${ic}</div><b>${nome}</b><span>${sub}</span></div>`;
   $('#corpo').innerHTML = `
     <div class="secao">Manejo do rebanho</div>
@@ -188,6 +192,15 @@ async function telaInicio(){
       ${q('animais','🏷️','Animais', fmtNum(nAni,0)+' ativos')}
       ${q('pesagem','⚖️','Pesagem no curral','Brinco ou chip + peso')}
       ${q('histind','🗂️','Histórico individual','Pesagens, mortes, vendas...')}
+    </div>
+    <div class="secao">Financeiro</div>
+    <div class="grade">
+      ${q('finpagar','💸','Contas a pagar', venP ? `<span style="color:var(--vermelho)">${venP} vencidas</span>` : 'Em aberto e pagas')}
+      ${q('finreceber','💰','Contas a receber', venR ? `<span style="color:var(--vermelho)">${venR} vencidas</span>` : 'Em aberto e recebidas')}
+      ${q('finsaldos','🏦','Contas e saldos','Saldos, extrato e transferências')}
+      ${q('finfluxo','📈','Fluxo de caixa','Entradas e saídas por mês')}
+      ${q('finplano','🧾','Plano de contas','Contas de receita e despesa')}
+      ${q('fincentros','🎯','Centros de custo','Pecuária, administrativo...')}
     </div>
     <div class="secao">Cadastros</div>
     <div class="grade">
@@ -230,8 +243,20 @@ const CAD = {
     busca:['nome','codigo'], filtro:['tipo_uso','Tipo de uso']},
   fazendas: {tabela:'fazendas', titulo:'Fazendas', ordem:'nome', porFazenda:false,
     colunas:[['nome','Nome'],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']],
-    campos:[['nome','Nome',{obr:1}],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']], busca:['nome','municipio']}
+    campos:[['nome','Nome',{obr:1}],['municipio','Município'],['estado','UF'],['proprietario','Proprietário']], busca:['nome','municipio']},
+  fincontas: {tabela:'contas_bancarias', titulo:'Contas bancárias e caixas', ordem:'nome', porFazenda:true, fin:true,
+    colunas:[['nome','Nome'],['tipo','Tipo'],['banco','Banco'],['saldo_inicial','Saldo inicial','n'],['data_saldo_inicial','Data do saldo inicial','d'],['ativo','Situação','b']],
+    campos:[['nome','Nome',{obr:1}],['tipo','Tipo',{op:['Corrente','Poupança','Caixa','Cartão de crédito','Investimento']}],['banco','Banco'],['agencia','Agência'],['numero','Número da conta'],
+      ['saldo_inicial','Saldo inicial (R$)',{tipo:'number'}],['data_saldo_inicial','Data do saldo inicial',{tipo:'date'}],['ativo','Ativa',{tipo:'bool'}]],
+    busca:['nome','banco'], filtro:['tipo','Tipo']},
+  fincentros: {tabela:'centros_custo', titulo:'Centros de custo', ordem:'nome', porFazenda:true, fin:true,
+    colunas:[['nome','Nome'],['ativo','Situação','b']], campos:[['nome','Nome',{obr:1}],['ativo','Ativo',{tipo:'bool'}]], busca:['nome']},
+  finplano: {tabela:'plano_contas', titulo:'Plano de contas', ordem:'codigo', porFazenda:true, fin:true,
+    colunas:[['codigo','Código'],['nome','Nome'],['grupo','Grupo'],['natureza','Natureza'],['ativo','Situação','b']],
+    campos:[['codigo','Código',{obr:1}],['nome','Nome',{obr:1}],['grupo','Grupo (ex.: 200 - Salários e encargos)'],['natureza','Natureza',{op:['Despesa','Receita']}],['ativo','Ativo',{tipo:'bool'}]],
+    busca:['codigo','nome','grupo'], filtro:['grupo','Grupo']}
 };
+const fazCad = C => C.fin ? finFaz() : E.fazenda.id;
 const refCache = {};
 async function carregarRef(t){
   const {data} = await sb.from(t).select('id,nome').eq('fazenda_id', E.fazenda.id).order('nome');
@@ -241,7 +266,7 @@ async function carregarRef(t){
 async function telaCadastro(chave){
   const C = CAD[chave];
   let q = sb.from(C.tabela).select('*').order(C.ordem);
-  if (C.porFazenda) q = q.eq('fazenda_id', E.fazenda.id);
+  if (C.porFazenda) q = q.eq('fazenda_id', fazCad(C));
   const {data, error} = await q;
   if (error) { $('#corpo').innerHTML = `<div class="msg erro">${esc(error.message)}</div>`; return; }
   const linhas = data || [];
@@ -262,7 +287,7 @@ async function telaCadastro(chave){
     const b = $('#busca').value.toLowerCase(), f = $('#filtro')?.value || '';
     return linhas.filter(l => (!b || C.busca.some(k => String(l[k]||'').toLowerCase().includes(b))) && (!f || l[C.filtro[0]] === f));
   };
-  const celula = (l, c) => c[2]==='n' ? fmtNum(l[c[0]]) : c[2]==='b' ? (l[c[0]] ? 'Ativo' : 'Inativo') : esc(l[c[0]]);
+  const celula = (l, c) => c[2]==='n' ? fmtNum(l[c[0]]) : c[2]==='d' ? fD(l[c[0]]) : c[2]==='b' ? (l[c[0]] ? 'Ativo' : 'Inativo') : esc(l[c[0]]);
   const desenhar = () => {
     const ls = filtrar();
     $('#tb').innerHTML = ls.length ? ls.map(l => `<tr class="clic" data-id="${l.id}">${C.colunas.map(c => `<td class="${c[2]==='n'?'num':''}">${celula(l,c)}</td>`).join('')}</tr>`).join('')
@@ -307,11 +332,12 @@ function formCadastro(chave, reg){
       const el = m.querySelector('#f_'+k);
       let v = o.tipo === 'bool' ? el.checked : el.value.trim();
       if (o.tipo === 'number') v = v === '' ? 0 : Number(v.replace(',', '.'));
-      if (o.ref || (o.op && v === '')) v = v || null;
+      if (o.ref || o.tipo === 'date' || (o.op && v === '')) v = v || null;
       if (o.obr && !v) return erro(`Preencha: ${rot}`);
       obj[k] = v;
     }
-    if (C.porFazenda) obj.fazenda_id = E.fazenda.id;
+    if (C.porFazenda) obj.fazenda_id = fazCad(C);
+    if (C.fin) FIN = null;
     const r = reg ? await sb.from(C.tabela).update(obj).eq('id', reg.id) : await sb.from(C.tabela).insert(obj);
     if (r.error) return erro(/duplicate/.test(r.error.message) ? 'Já existe um cadastro com esse código/nome.' : r.error.message);
     m.remove(); aviso('Salvo');
@@ -865,6 +891,337 @@ async function telaHistIndividual(){
   $('#h_ver').onclick = buscar;
   $('#csv').onclick = () => baixarCSV('Histórico individual', ['Data','Brinco','Operação','Peso (kg)','Detalhe'], rows.map(e => [fmtData(e.data+'T12:00:00'), e.animais?.brinco, e.operacao, fmtNum(e.peso,0), [e.causa_morte, e.procedimentos, e.observacao].filter(Boolean).join(' · ')]));
   buscar();
+}
+
+// ---------- Financeiro ----------
+const finFaz = () => (E.fazendas.find(f => f.sede_financeiro) || E.fazenda).id;
+const fD = v => v ? fmtData(v + 'T12:00:00') : '';
+const moeda = v => (Number(v)||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+const OPS_FIN = {Pagar:['Pagamentos','Compra de produtos','Compra de animais','Transportes e fretes','Comissões'], Receber:['Recebimentos','Venda de animais','Venda de produtos']};
+const FORMAS = ['PIX','Boleto','Transferência','Dinheiro','Cartão de crédito','Débito em conta','Cheque','Outros'];
+let FIN = null;
+async function todas(mk){ let out = [], i = 0; while (true) { const {data, error} = await mk().range(i, i+999); if (error) throw error; out = out.concat(data||[]); if (!data || data.length < 1000) break; i += 1000; } return out; }
+async function carregarFin(forcar){
+  if (FIN && !forcar && FIN.faz === finFaz()) return FIN;
+  const fz = finFaz();
+  const [contas, centros, planos, lancs, transf] = await Promise.all([
+    todas(() => sb.from('contas_bancarias').select('*').eq('fazenda_id', fz).order('nome')),
+    todas(() => sb.from('centros_custo').select('*').eq('fazenda_id', fz).order('nome')),
+    todas(() => sb.from('plano_contas').select('*').eq('fazenda_id', fz).order('codigo')),
+    todas(() => sb.from('lancamentos_financeiros').select('*').eq('fazenda_id', fz).order('vencimento').order('id')),
+    todas(() => sb.from('transferencias_bancarias').select('*').eq('fazenda_id', fz).order('data'))]);
+  FIN = {faz:fz, contas, centros, planos, lancs, transf};
+  return FIN;
+}
+const nomeConta = id => FIN?.contas.find(c => c.id === id)?.nome || '';
+const statusLanc = l => l.status === 'Efetivada' ? (l.tipo === 'Pagar' ? 'Pago' : 'Recebido') : l.status === 'Cancelada' ? 'Cancelada' : (l.vencimento < hojeISO() ? 'Vencida' : 'Em aberto');
+const corStatus = s => ({Pago:'#e7f3df', Recebido:'#e7f3df', Vencida:'#fde8e6', Cancelada:'#eee'}[s] || '#fff4d6');
+const grupoDoPlano = txt => { const cod = String(txt||'').split(' - ')[0].trim(); const p = FIN.planos.find(x => x.codigo === cod); return p ? p : null; };
+// movimentos que entram no saldo de uma conta
+function movimentosConta(c, ate){
+  const lim = ate || hojeISO(), ini = c.data_saldo_inicial || '0000';
+  const cartao = c.tipo === 'Cartão de crédito';
+  const mv = [];
+  FIN.lancs.forEach(l => {
+    if (l.conta_id !== c.id || !l.data_pagamento || l.data_pagamento > lim || l.status === 'Cancelada') return;
+    if (!cartao && (l.status !== 'Efetivada' || l.data_pagamento < ini)) return;
+    const v = Number(l.valor_pago ?? l.valor) || 0;
+    mv.push({data:l.data_pagamento, desc:l.pessoa, det:[l.plano_conta, l.observacao].filter(Boolean).join(' · '), op:l.operacao, valor:l.tipo === 'Receber' ? v : -v, lanc:l});
+  });
+  FIN.transf.forEach(t => {
+    if (t.data > lim || t.data < ini) return;
+    if (t.conta_origem_id === c.id) mv.push({data:t.data, desc:'Transferência para '+nomeConta(t.conta_destino_id), det:t.observacao||'', op:'Transferência', valor:-Number(t.valor), transf:t});
+    if (t.conta_destino_id === c.id) mv.push({data:t.data, desc:'Transferência de '+nomeConta(t.conta_origem_id), det:t.observacao||'', op:'Transferência', valor:Number(t.valor), transf:t});
+  });
+  return mv.sort((a,b) => a.data < b.data ? -1 : a.data > b.data ? 1 : 0);
+}
+const saldoConta = (c, ate) => Number(c.saldo_inicial||0) + movimentosConta(c, ate).reduce((s,m) => s + m.valor, 0);
+
+async function telaContasFin(tipo){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin();
+  const rec = tipo === 'Receber', titulo = rec ? 'Contas a receber' : 'Contas a pagar';
+  const lanc = () => FIN.lancs.filter(l => l.tipo === tipo);
+  const ccs = FIN.centros.map(c => c.nome);
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>${titulo}</h2>
+      ${podeEditar() ? '<button class="btn" id="novo">+ Novo</button>' : ''}
+      <button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros">
+      <select id="fst"><option value="abertas">Em aberto e vencidas</option><option value="Vencida">Só vencidas</option><option value="efet">${rec?'Recebidas':'Pagas'}</option><option value="">Todas</option></select>
+      <select id="fdt"><option value="venc">Por vencimento</option><option value="pag">Por data de ${rec?'recebimento':'pagamento'}</option></select>
+      <input id="fde" type="date" title="De"><input id="fate" type="date" title="Até">
+    </div>
+    <div class="filtros">
+      <input id="fbus" placeholder="Pesquisar pessoa, plano, observação, documento">
+      <select id="fcc"><option value="">Centro de custo: todos</option>${ccs.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+      <select id="fconta"><option value="">Conta: todas</option>${FIN.contas.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select>
+    </div>
+    <div class="grade" id="tots" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr));margin-bottom:10px"></div>
+    <div class="tabela"><table><thead><tr><th>Vencimento</th><th>${rec?'Cliente':'Fornecedor'}</th><th>Plano de contas</th><th>Centro de custo</th><th>Parc.</th><th class="num">Valor</th><th>${rec?'Recebido em':'Pago em'}</th><th class="num">Valor ${rec?'recebido':'pago'}</th><th>Conta</th><th>Situação</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('inicio');
+  if ($('#novo')) $('#novo').onclick = () => formLancFin({tipo});
+  const filtrar = () => {
+    const st = $('#fst').value, dt = $('#fdt').value, de = $('#fde').value, ate = $('#fate').value, b = $('#fbus').value.toLowerCase(), cc = $('#fcc').value, ct = $('#fconta').value;
+    return lanc().filter(l => {
+      const s = statusLanc(l);
+      if (st === 'abertas' && !['Em aberto','Vencida'].includes(s)) return false;
+      if (st === 'Vencida' && s !== 'Vencida') return false;
+      if (st === 'efet' && l.status !== 'Efetivada') return false;
+      const d = dt === 'pag' ? l.data_pagamento : l.vencimento;
+      if ((de || ate) && !d) return false;
+      if (de && d < de) return false; if (ate && d > ate) return false;
+      if (cc && !String(l.centro_custo||'').split(', ').includes(cc)) return false;
+      if (ct && l.conta_id !== ct) return false;
+      if (b && ![l.pessoa, l.plano_conta, l.observacao, l.documento, l.socio].some(x => String(x||'').toLowerCase().includes(b))) return false;
+      return true;
+    });
+  };
+  let ls = [];
+  const desenhar = () => {
+    ls = filtrar();
+    const tot = ls.reduce((s,l) => s + Number(l.valor||0), 0), pago = ls.filter(l => l.status==='Efetivada').reduce((s,l) => s + Number(l.valor_pago ?? l.valor ?? 0), 0);
+    const aberto = ls.filter(l => l.status==='Em aberto').reduce((s,l) => s + Number(l.valor||0), 0), venc = ls.filter(l => statusLanc(l)==='Vencida').reduce((s,l) => s + Number(l.valor||0), 0);
+    const card = (t, v, cor) => `<div class="quad" style="min-height:70px;cursor:default;padding:10px"><span>${t}</span><b style="color:${cor||'inherit'}">${moeda(v)}</b></div>`;
+    $('#tots').innerHTML = card('Total', tot) + card(rec ? 'Recebido' : 'Pago', pago, 'var(--verde)') + card('Em aberto', aberto) + card('Vencido', venc, 'var(--vermelho)');
+    const mostra = ls.slice(0, 600);
+    $('#tb').innerHTML = mostra.map((l, i) => { const s = statusLanc(l);
+      return `<tr class="clic" data-i="${i}"><td>${fD(l.vencimento)}</td><td>${esc(l.pessoa)}</td><td>${esc(l.plano_conta)}</td><td>${esc(l.centro_custo)}</td><td>${esc(l.parcela)}</td><td class="num">${fmtNum(l.valor)}</td><td>${fD(l.data_pagamento)}</td><td class="num">${l.status==='Efetivada'?fmtNum(l.valor_pago ?? l.valor):''}</td><td>${esc(nomeConta(l.conta_id))}</td><td><span class="pill" style="background:${corStatus(s)}">${s}</span></td></tr>`; }).join('')
+      || '<tr><td colspan="10" class="vazio">Nada encontrado</td></tr>';
+    $('#rod').textContent = `${fmtNum(ls.length,0)} lançamentos` + (ls.length > mostra.length ? ` (mostrando os primeiros ${mostra.length}; use os filtros ou exporte a planilha)` : '');
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formLancFin(mostra[+tr.dataset.i]));
+  };
+  ['fst','fdt','fde','fate','fcc','fconta'].forEach(id => $('#'+id).onchange = desenhar); $('#fbus').oninput = desenhar;
+  $('#csv').onclick = () => baixarCSV(titulo, ['Vencimento', rec?'Cliente':'Fornecedor','Operação','Documento','Tipo doc.','Plano de contas','Centro de custo','Parcela','Valor', rec?'Data recebimento':'Data pagamento', rec?'Valor recebido':'Valor pago','Conta','Forma','Situação','Sócio','Observação'],
+    ls.map(l => [fD(l.vencimento), l.pessoa, l.operacao, l.documento, l.tipo_documento, l.plano_conta, l.centro_custo, l.parcela, fmtNum(l.valor), fD(l.data_pagamento), l.status==='Efetivada'?fmtNum(l.valor_pago ?? l.valor):'', nomeConta(l.conta_id), l.forma_pagamento, statusLanc(l), l.socio, l.observacao]));
+  desenhar();
+}
+
+function formLancFin(reg){
+  const novo = !reg.id, tipo = reg.tipo, rec = tipo === 'Receber', pode = podeEditar();
+  const nat = rec ? 'Receita' : 'Despesa';
+  const planos = FIN.planos.filter(p => p.natureza === nat || reg.plano_conta === p.codigo+' - '+p.nome);
+  const optPl = [...planos.map(p => p.codigo+' - '+p.nome)]; if (reg.plano_conta && !optPl.includes(reg.plano_conta)) optPl.unshift(reg.plano_conta);
+  const optCc = FIN.centros.map(c => c.nome); if (reg.centro_custo && !optCc.includes(reg.centro_custo)) optCc.unshift(reg.centro_custo);
+  const ops = OPS_FIN[tipo].includes(reg.operacao) || !reg.operacao ? OPS_FIN[tipo] : [reg.operacao, ...OPS_FIN[tipo]];
+  const pessoas = [...new Set(FIN.lancs.map(l => l.pessoa).filter(Boolean))].sort();
+  const socios = [...new Set(FIN.lancs.map(l => l.socio).filter(Boolean))].sort();
+  const sel = (id, arr, v, vazio) => `<select id="${id}">${vazio!==undefined?`<option value="">${vazio}</option>`:''}${arr.map(x => `<option ${x===v?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+  const efet = reg.status === 'Efetivada';
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>${novo ? 'Nova conta a ' + (rec?'receber':'pagar') : (rec ? 'Conta a receber' : 'Conta a pagar')}</h3>
+    <label>Operação</label>${sel('l_op', ops, reg.operacao)}
+    <label>${rec?'Cliente':'Fornecedor'} *</label><input id="l_pes" list="l_pesl" value="${esc(reg.pessoa)}"><datalist id="l_pesl">${pessoas.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Documento</label><input id="l_doc" value="${esc(reg.documento)}"></div>
+      <div style="flex:1"><label>Tipo de documento</label>${sel('l_tdoc', ['Nota fiscal','Recibo','Boleto','Contrato','Outros'].concat(reg.tipo_documento && !['Nota fiscal','Recibo','Boleto','Contrato','Outros'].includes(reg.tipo_documento) ? [reg.tipo_documento] : []), reg.tipo_documento, '—')}</div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Emissão</label><input id="l_emi" type="date" value="${reg.data_emissao || (novo ? hojeISO() : '')}"></div>
+      <div style="flex:1"><label>${novo ? '1º vencimento' : 'Vencimento'} *</label><input id="l_ven" type="date" value="${reg.vencimento || hojeISO()}"></div></div>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Valor${novo ? ' de cada parcela' : ''} (R$) *</label><input id="l_val" inputmode="decimal" value="${reg.valor != null ? String(reg.valor).replace('.',',') : ''}"></div>
+      ${novo ? '<div style="flex:1"><label>Parcelas</label><input id="l_npar" type="number" min="1" max="120" value="1"></div>' : `<div style="flex:1"><label>Parcela</label><input id="l_par" value="${esc(reg.parcela)}"></div>`}</div>
+    <label>Plano de contas *</label>${sel('l_pl', optPl, reg.plano_conta, '—')}
+    <label>Centro de custo *</label>${sel('l_cc', optCc, reg.centro_custo, '—')}
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Conta</label><select id="l_conta"><option value="">—</option>${FIN.contas.filter(c => c.ativo || c.id === reg.conta_id).map(c => `<option value="${c.id}" ${c.id===reg.conta_id?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
+      <div style="flex:1"><label>Forma de pagamento</label>${sel('l_forma', FORMAS.concat(reg.forma_pagamento && !FORMAS.includes(reg.forma_pagamento) ? [reg.forma_pagamento] : []), reg.forma_pagamento, '—')}</div></div>
+    <label>Sócio / produtor</label><input id="l_soc" list="l_socl" value="${esc(reg.socio)}"><datalist id="l_socl">${socios.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
+    <label>Observação</label><input id="l_obs" value="${esc(reg.observacao)}">
+    <label class="chk" style="margin-top:12px"><input type="checkbox" id="l_efet" ${efet?'checked':''}> <b>Já foi ${rec?'recebido':'pago'}</b></label>
+    <div id="l_baixa" style="display:${efet?'flex':'none'};gap:8px"><div style="flex:1"><label>Data ${rec?'do recebimento':'do pagamento'}</label><input id="l_dpag" type="date" value="${reg.data_pagamento || hojeISO()}"></div>
+      <div style="flex:1"><label>Valor ${rec?'recebido':'pago'} (R$)</label><input id="l_vpag" inputmode="decimal" value="${reg.valor_pago != null ? String(reg.valor_pago).replace('.',',') : ''}" placeholder="igual ao valor"></div></div>
+    ${reg.criado_em ? `<div class="rodape">Lançado em ${fmtData(reg.criado_em)}${reg.id_origem !== undefined && !reg.criado_por ? ' · importado do sistema anterior' : ''}</div>` : ''}
+    <div class="msg erro" id="lerro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="lcan">Cancelar</button>${pode ? '<button class="btn" id="lsal">Salvar</button>' : ''}</div>
+    ${!novo && ehAdmin() ? '<div class="acoes"><button class="btn perigo" id="lexc">Excluir</button></div>' : ''}</div>`;
+  document.body.appendChild(m);
+  const q = s => m.querySelector(s);
+  if (!pode) m.querySelectorAll('input,select').forEach(i => i.disabled = true);
+  q('#l_efet').onchange = () => { q('#l_baixa').style.display = q('#l_efet').checked ? 'flex' : 'none'; };
+  q('#lcan').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
+  const erro = t => { const d = q('#lerro'); d.textContent = t; d.style.display = 'block'; };
+  const num = v => { v = String(v||'').trim().replace(/\./g,'').replace(',', '.'); return v === '' ? null : Number(v); };
+  if (pode) q('#lsal').onclick = async () => {
+    const valor = num(q('#l_val').value);
+    const o = {tipo, operacao:q('#l_op').value, pessoa:q('#l_pes').value.trim(), documento:q('#l_doc').value.trim()||null, tipo_documento:q('#l_tdoc').value||null,
+      data_emissao:q('#l_emi').value||null, vencimento:q('#l_ven').value, valor, plano_conta:q('#l_pl').value||null, centro_custo:q('#l_cc').value||null,
+      conta_id:q('#l_conta').value||null, forma_pagamento:q('#l_forma').value||null, socio:q('#l_soc').value.trim()||null, observacao:q('#l_obs').value.trim()||null};
+    if (!o.pessoa) return erro(`Preencha: ${rec?'cliente':'fornecedor'}`);
+    if (!o.vencimento) return erro('Preencha o vencimento');
+    if (!(valor > 0)) return erro('Informe um valor maior que zero');
+    if (!o.plano_conta) return erro('Escolha o plano de contas');
+    if (!o.centro_custo) return erro('Escolha o centro de custo');
+    if (q('#l_efet').checked) {
+      o.status = 'Efetivada'; o.data_pagamento = q('#l_dpag').value; o.valor_pago = num(q('#l_vpag').value) ?? valor;
+      if (!o.data_pagamento) return erro('Informe a data ' + (rec?'do recebimento':'do pagamento'));
+      if (!o.conta_id) return erro('Escolha a conta de onde ' + (rec?'entrou':'saiu') + ' o dinheiro');
+    } else { o.status = 'Em aberto'; o.data_pagamento = null; o.valor_pago = null; }
+    q('#lsal').disabled = true;
+    let r;
+    if (novo) {
+      const n = Math.max(1, Math.min(120, parseInt(q('#l_npar').value) || 1)), d0 = new Date(o.vencimento + 'T12:00:00');
+      const linhas = [];
+      for (let i = 0; i < n; i++) {
+        const d = new Date(d0); d.setMonth(d0.getMonth() + i);
+        if (d.getDate() !== d0.getDate()) d.setDate(0);
+        const iso = new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+        linhas.push({...o, fazenda_id:FIN.faz, vencimento:iso, parcela:`${i+1}/${n}`,
+          ...(i > 0 ? {status:'Em aberto', data_pagamento:null, valor_pago:null} : {})});
+      }
+      r = await sb.from('lancamentos_financeiros').insert(linhas);
+    } else {
+      o.parcela = q('#l_par').value.trim() || null; o.atualizado_em = new Date().toISOString();
+      r = await sb.from('lancamentos_financeiros').update(o).eq('id', reg.id);
+    }
+    if (r.error) { q('#lsal').disabled = false; return erro(r.error.message); }
+    m.remove(); aviso('Salvo'); await carregarFin(true); render();
+  };
+  const exc = q('#lexc');
+  if (exc) exc.onclick = async () => {
+    if (!confirm('Excluir este lançamento? Não dá para desfazer.')) return;
+    const r = await sb.from('lancamentos_financeiros').delete().eq('id', reg.id);
+    if (r.error) return erro(r.error.message);
+    m.remove(); aviso('Excluído'); await carregarFin(true); render();
+  };
+}
+
+async function telaSaldos(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin();
+  const hoje = hojeISO();
+  const linhas = FIN.contas.map(c => {
+    const s = saldoConta(c);
+    const prev = FIN.lancs.filter(l => l.conta_id === c.id && l.status === 'Em aberto' && c.tipo !== 'Cartão de crédito').reduce((t,l) => t + (l.tipo==='Receber'?1:-1)*Number(l.valor||0), 0);
+    return {c, s, prev};
+  });
+  const tot = linhas.reduce((t,x) => t + x.s, 0);
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>Contas e saldos</h2>
+      ${podeEditar() ? '<button class="btn" id="transf">⇄ Transferência</button>' : ''}
+      <button class="btn sec" id="cad">Cadastro de contas</button></div>
+    <div class="rodape" style="margin-top:0">Saldo até hoje (${fmtData(new Date())}). Clique na conta para ver o extrato.</div>
+    <div class="tabela"><table><thead><tr><th>Conta</th><th>Tipo</th><th class="num">Saldo atual</th><th class="num">Em aberto lançado nela</th><th class="num">Saldo previsto</th></tr></thead><tbody>
+      ${linhas.map((x,i) => `<tr class="clic" data-i="${i}"><td><b>${esc(x.c.nome)}</b>${x.c.ativo?'':' <span class="pill">inativa</span>'}</td><td>${esc(x.c.tipo)}</td>
+        <td class="num" style="color:${x.s<0?'var(--vermelho)':'var(--verde)'}"><b>${moeda(x.s)}</b></td><td class="num">${x.prev?moeda(x.prev):''}</td><td class="num">${moeda(x.s + x.prev)}</td></tr>`).join('')}
+      <tr><td colspan="2"><b>Total</b></td><td class="num"><b>${moeda(tot)}</b></td><td></td><td class="num">${moeda(linhas.reduce((t,x) => t + x.s + x.prev, 0))}</td></tr>
+    </tbody></table></div>
+    <div class="rodape">Transferências entre contas: ${FIN.transf.length}</div>`;
+  $('#volta').onclick = () => ir('inicio');
+  $('#cad').onclick = () => ir('fincontas');
+  if ($('#transf')) $('#transf').onclick = formTransferencia;
+  document.querySelectorAll('tr.clic').forEach(tr => tr.onclick = () => { E.extratoConta = linhas[+tr.dataset.i].c.id; ir('finextrato'); });
+}
+
+async function telaExtrato(){
+  await carregarFin();
+  const c = FIN.contas.find(x => x.id === E.extratoConta) || FIN.contas[0];
+  if (!c) return ir('finsaldos');
+  const h = hojeISO(), ini30 = new Date(Date.now() - 30*864e5).toISOString().slice(0,10);
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>Extrato</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="xc">${FIN.contas.map(x => `<option value="${x.id}" ${x.id===c.id?'selected':''}>${esc(x.nome)}</option>`).join('')}</select>
+      <input id="xde" type="date" value="${ini30}"><input id="xate" type="date" value="${h}"></div>
+    <div class="tabela"><table><thead><tr><th>Data</th><th>Descrição</th><th>Operação</th><th>Detalhe</th><th class="num">Valor</th><th class="num">Saldo</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <div class="rodape" id="rod"></div>`;
+  $('#volta').onclick = () => ir('finsaldos');
+  let mostra = [];
+  const desenhar = () => {
+    const conta = FIN.contas.find(x => x.id === $('#xc').value); E.extratoConta = conta.id;
+    const de = $('#xde').value || '0000', ate = $('#xate').value || '9999';
+    const mv = movimentosConta(conta, '9999-12-31');
+    let saldo = Number(conta.saldo_inicial||0);
+    mv.filter(x => x.data < de).forEach(x => saldo += x.valor);
+    const anterior = saldo;
+    mostra = mv.filter(x => x.data >= de && x.data <= ate).map(x => ({...x, saldo: saldo += x.valor}));
+    const ent = mostra.filter(x => x.valor > 0).reduce((s,x) => s + x.valor, 0), sai = mostra.filter(x => x.valor < 0).reduce((s,x) => s + x.valor, 0);
+    $('#tb').innerHTML = `<tr><td>${fD(de === '0000' ? '' : de)}</td><td colspan="4"><i>Saldo anterior</i></td><td class="num">${fmtNum(anterior)}</td></tr>` +
+      mostra.map((x,i) => `<tr class="${x.lanc?'clic':''}" data-i="${i}"><td>${fD(x.data)}</td><td>${esc(x.desc)}</td><td>${esc(x.op)}</td><td>${esc(x.det)}</td><td class="num" style="color:${x.valor<0?'var(--vermelho)':'var(--verde)'}">${fmtNum(x.valor)}</td><td class="num">${fmtNum(x.saldo)}</td></tr>`).join('');
+    $('#rod').textContent = `${mostra.length} movimentos · entradas ${moeda(ent)} · saídas ${moeda(-sai)} · saldo final ${moeda(saldo)}`;
+    document.querySelectorAll('#tb tr.clic').forEach(tr => tr.onclick = () => formLancFin(mostra[+tr.dataset.i].lanc));
+  };
+  ['xc','xde','xate'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Extrato ' + nomeConta(E.extratoConta), ['Data','Descrição','Operação','Detalhe','Valor','Saldo'], mostra.map(x => [fD(x.data), x.desc, x.op, x.det, fmtNum(x.valor), fmtNum(x.saldo)]));
+  desenhar();
+}
+
+function formTransferencia(){
+  const ops = FIN.contas.filter(c => c.ativo).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="caixa"><h3>Transferência entre contas</h3>
+    <label>Sai da conta *</label><select id="t_o">${ops}</select>
+    <label>Entra na conta *</label><select id="t_d">${ops}</select>
+    <div style="display:flex;gap:8px"><div style="flex:1"><label>Data *</label><input id="t_dt" type="date" value="${hojeISO()}"></div>
+      <div style="flex:1"><label>Valor (R$) *</label><input id="t_v" inputmode="decimal"></div></div>
+    <label>Observação</label><input id="t_obs">
+    <div class="msg erro" id="terro" style="display:none"></div>
+    <div class="acoes"><button class="btn sec" id="tcan">Cancelar</button><button class="btn" id="tsal">Salvar</button></div></div>`;
+  document.body.appendChild(m);
+  const q = s => m.querySelector(s);
+  if (q('#t_d').options.length > 1) q('#t_d').selectedIndex = 1;
+  q('#tcan').onclick = () => m.remove();
+  q('#tsal').onclick = async () => {
+    const v = Number(String(q('#t_v').value).replace(/\./g,'').replace(',', '.'));
+    const erro = t => { q('#terro').textContent = t; q('#terro').style.display = 'block'; };
+    if (q('#t_o').value === q('#t_d').value) return erro('Escolha contas diferentes');
+    if (!(v > 0)) return erro('Informe o valor');
+    if (!q('#t_dt').value) return erro('Informe a data');
+    const r = await sb.from('transferencias_bancarias').insert({fazenda_id:FIN.faz, conta_origem_id:q('#t_o').value, conta_destino_id:q('#t_d').value, data:q('#t_dt').value, valor:v, observacao:q('#t_obs').value.trim()||null});
+    if (r.error) return erro(r.error.message);
+    m.remove(); aviso('Transferência lançada'); await carregarFin(true); render();
+  };
+}
+
+async function telaFluxo(){
+  $('#corpo').innerHTML = '<div class="vazio">Carregando…</div>';
+  await carregarFin();
+  const anos = [...new Set(FIN.lancs.map(l => (l.data_pagamento || l.vencimento).slice(0,4)))].sort();
+  const anoAtual = hojeISO().slice(0,4);
+  const MES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  $('#corpo').innerHTML = `
+    <div class="topo"><button class="voltar" id="volta">←</button><h2>Fluxo de caixa</h2><button class="btn sec" id="csv">Exportar planilha</button></div>
+    <div class="filtros"><select id="fa">${anos.map(a => `<option ${a===anoAtual?'selected':''}>${a}</option>`).join('')}</select>
+      <select id="fm"><option value="real">Realizado (pago e recebido)</option><option value="prev">Previsto (em aberto, pelo vencimento)</option><option value="tudo">Realizado + previsto</option></select>
+      <select id="fcc"><option value="">Centro de custo: todos</option>${FIN.centros.map(c => `<option>${esc(c.nome)}</option>`).join('')}</select>
+      <select id="fdet"><option value="grupo">Por grupo do plano</option><option value="conta">Por conta do plano</option></select></div>
+    <div class="tabela"><table id="tf"></table></div>
+    <div class="rodape">Valores de lançamentos com rateio entre vários centros de custo entram inteiros em cada centro escolhido no filtro.</div>`;
+  $('#volta').onclick = () => ir('inicio');
+  let csv = [];
+  const desenhar = () => {
+    const ano = $('#fa').value, modo = $('#fm').value, cc = $('#fcc').value, det = $('#fdet').value;
+    const lin = {}; const ord = {};
+    FIN.lancs.forEach(l => {
+      if (l.status === 'Cancelada') return;
+      if (cc && !String(l.centro_custo||'').split(', ').includes(cc)) return;
+      let d, v;
+      if (l.status === 'Efetivada') { if (modo === 'prev') return; d = l.data_pagamento || l.vencimento; v = Number(l.valor_pago ?? l.valor); }
+      else { if (modo === 'real') return; d = l.vencimento; v = Number(l.valor); }
+      if (!d || d.slice(0,4) !== ano) return;
+      const p = grupoDoPlano(l.plano_conta);
+      const nat = l.tipo === 'Receber' ? 'Entradas' : 'Saídas';
+      const chave = det === 'grupo' ? (p?.grupo || l.plano_conta || 'Sem plano') : (l.plano_conta || 'Sem plano');
+      const k = nat + '|' + chave;
+      if (!lin[k]) { lin[k] = Array(12).fill(0); ord[k] = [nat, chave]; }
+      lin[k][+d.slice(5,7) - 1] += l.tipo === 'Receber' ? v : -v;
+    });
+    const ks = Object.keys(lin).sort((a,b) => a.localeCompare(b, 'pt-BR', {numeric:true}));
+    const soma = f => Array.from({length:12}, (_,i) => ks.filter(f).reduce((s,k) => s + lin[k][i], 0));
+    const ent = soma(k => k.startsWith('Entradas')), sai = soma(k => k.startsWith('Saídas')), res = ent.map((v,i) => v + sai[i]);
+    const acum = []; res.reduce((s,v,i) => (acum[i] = s + v), 0);
+    const tot = a => a.reduce((s,v) => s + v, 0);
+    const cel = v => `<td class="num" style="color:${v<0?'var(--vermelho)':''}">${v ? fmtNum(v,0) : ''}</td>`;
+    const row = (nome, a, est='') => `<tr style="${est}"><td>${nome}</td>${a.map(cel).join('')}${cel(tot(a))}</tr>`;
+    const bloco = nat => ks.filter(k => k.startsWith(nat)).map(k => row('&nbsp;&nbsp;' + esc(ord[k][1]), lin[k])).join('');
+    $('#tf').innerHTML = `<thead><tr><th>${ano}</th>${MES.map(m => `<th class="num">${m}</th>`).join('')}<th class="num">Total</th></tr></thead><tbody>
+      ${row('<b>Entradas</b>', ent, 'background:#f2f8ec')}${bloco('Entradas')}
+      ${row('<b>Saídas</b>', sai, 'background:#fdf1ef')}${bloco('Saídas')}
+      ${row('<b>Resultado do mês</b>', res, 'background:#eef2e8;font-weight:700')}
+      ${row('<b>Resultado acumulado</b>', acum, 'background:#eef2e8')}</tbody>`;
+    csv = [['Entradas', ...ent, tot(ent)], ...ks.filter(k => k.startsWith('Entradas')).map(k => ['  '+ord[k][1], ...lin[k], tot(lin[k])]),
+      ['Saídas', ...sai, tot(sai)], ...ks.filter(k => k.startsWith('Saídas')).map(k => ['  '+ord[k][1], ...lin[k], tot(lin[k])]),
+      ['Resultado do mês', ...res, tot(res)]].map(r => r.map((v,i) => i ? fmtNum(v) : v));
+  };
+  ['fa','fm','fcc','fdet'].forEach(id => $('#'+id).onchange = desenhar);
+  $('#csv').onclick = () => baixarCSV('Fluxo de caixa ' + $('#fa').value, [$('#fa').value, ...MES, 'Total'], csv);
+  desenhar();
 }
 
 // ---------- Usuários ----------
