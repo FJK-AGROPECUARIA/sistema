@@ -18,7 +18,8 @@
 *{box-sizing:border-box}
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--texto);font-size:15px}
 header{background:#fff;color:var(--verde);padding:6px 14px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;position:sticky;top:0;z-index:1000;border-radius:0 0 18px 18px;box-shadow:0 2px 10px rgba(17,37,61,.10)}
-header .hEsq{display:flex;align-items:center;gap:10px;min-width:0}
+header .hEsq{display:flex;align-items:center;gap:26px;min-width:0}
+header .logo-fjk{cursor:pointer}
 header .hMeio{display:flex;align-items:flex-end;gap:22px;justify-content:center}
 header .hFaz{display:flex;flex-direction:column;align-items:flex-start}
 header .hFaz small{font-size:10px;color:var(--cinza);margin:0 0 2px 2px;line-height:1}
@@ -30,7 +31,7 @@ header select.off{background:#fff;color:var(--verde);border:1.5px solid var(--ve
 header #btSair{background:none;border:1px solid var(--borda);color:var(--cinza)}
 .logo-fjk{height:clamp(56px,15vw,84px);width:auto;flex:none}
 @media(max-width:640px){header{grid-template-columns:auto 1fr auto;padding:6px 8px;gap:6px}header .topoTxt{display:none}header .hMeio{flex-wrap:wrap;gap:10px}header #btGestao{font-size:12px;padding:6px 8px}header #btSair{padding:6px 8px}}
-.topoTxt{position:relative;padding-left:12px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.topoTxt{position:relative;padding-left:20px;display:flex;flex-direction:column;justify-content:center;min-width:0}
 .topoTxt::before{content:'';position:absolute;left:0;top:12%;bottom:12%;width:2px;border-radius:2px;background:var(--lima);opacity:.85}
 .login .logo-fjk{height:90px;display:block;margin:0 auto 10px}
 .logo{width:38px;height:38px;border-radius:9px;background:#fff;color:var(--verde);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;letter-spacing:-.5px;flex:none}
@@ -189,11 +190,11 @@ async function carregarPapel(){
 function cabecalho(){
   const gestao = E.fazendas.find(f => f.sede_financeiro), fazs = E.fazendas.filter(f => !f.sede_financeiro), naGestao = !!E.fazenda?.sede_financeiro;
   return `<header>
-    <div class="hEsq"><img class="logo-fjk" src="${LOGO_FJK}" alt="FJK Agropecuária">
+    <div class="hEsq"><img class="logo-fjk" id="logoTopo" src="${LOGO_FJK}" alt="FJK Agropecuária" title="Menu principal">
       <div class="topoTxt"><h1>SISTEMA DE GESTÃO</h1><small>${esc(E.perfil?.nome || '')}</small></div></div>
     <div class="hMeio">
       <div class="hFaz"><small>Selecione a fazenda</small><select id="selFaz" class="${naGestao ? 'off' : ''}">${naGestao ? '<option value="">Escolher fazenda</option>' : ''}${fazs.map(f => `<option value="${f.id}" ${f.id===E.fazenda?.id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select></div>
-      ${gestao ? `<button id="btGestao" class="${naGestao ? 'on' : ''}" title="Financeiro, contábil e todas as fazendas">🏛️ ${esc(gestao.nome)}</button>` : ''}</div>
+      ${gestao ? `<button id="btGestao" class="${naGestao ? 'on' : ''}" title="Financeiro, contábil e todas as fazendas">🏛️ Gestão do Grupo</button>` : ''}</div>
     <div class="hDir"><span id="filaInd" class="pill" style="display:none;background:#fff4d6;color:#8a5a00" title="Lançamentos guardados sem internet; enviam sozinhos quando o sinal voltar">⏳</span>
       <button id="btSair" title="Sair (${esc(E.usuario?.email || '')})">⎋ Sair</button></div>
   </header>`;
@@ -213,6 +214,7 @@ function render(){
   if (ehGestao() && SO_FAZENDA.includes(E.tela)) E.tela = 'inicio';
   $('#app').innerHTML = cabecalho() + '<main id="corpo"></main>';
   FILA.marca();
+  $('#logoTopo').onclick = () => { document.querySelectorAll('.modal').forEach(x => x.remove()); ir('inicio'); };
   const trocaFaz = async id => { if (!id) return; E.fazenda = E.fazendas.find(f => f.id === id); localStorage.setItem('fjk_fazenda', E.fazenda.id); await carregarPapel(); cacheBase = null; E.tela = 'inicio'; render(); };
   $('#selFaz').onchange = e => trocaFaz(e.target.value);
   if ($('#btGestao')) $('#btGestao').onclick = () => trocaFaz(E.fazendas.find(f => f.sede_financeiro).id);
