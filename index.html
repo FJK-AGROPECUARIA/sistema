@@ -973,7 +973,7 @@ function fichaArea(a, ls, modulo){
     ${ls.some(l=>l.tipo_peso==='Projetado')?`<div class="rodape">* peso projetado hoje pelo GMD da categoria${ls.filter(l=>l.peso_proj).map(l => ` · ${esc(l.cat_nome)}: último peso ${fmtNum(l.peso_real,0)} kg + ${fmtNum(l.gmd,3)} kg/dia`).join('')}</div>`:''}
     ${podeEditar() ? `<div class="secao">Lançar nesta área</div><div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px">
       ${['Movimentação','Morte','Nascimento','Mudança de categoria','Pesagem','Abate para consumo'].map(o => `<button class="btn sec peq" data-op="${o}" style="min-height:54px">${o}</button>`).join('')}</div>` : ''}
-    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="fch">Cancelar</button></div></div>`;
   document.body.appendChild(m);
   m.querySelector('#fch').onclick = () => m.remove();
   m.onclick = e => { if (e.target === m) m.remove(); };
@@ -1012,7 +1012,7 @@ async function formOperacao(pre){
     <div id="o_dica" class="msg" style="display:none;background:#eef2e8"></div>
     <div class="msg erro" id="o_erro" style="display:none"></div>
     <div class="msg" id="o_okmsg" style="display:none;background:#e3f3d8;color:#2f5d1e;font-weight:700"></div>
-    <div class="acoes"><button class="btn sec" id="o_can">Fechar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="o_can">Cancelar</button><button class="btn" id="o_sal">Lançar</button></div></div>`;
   document.body.appendChild(m);
   const g = id => m.querySelector('#'+id);
   let linhas = [];
@@ -1344,7 +1344,7 @@ async function fichaAnimal(id){
     <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th class="num">Peso</th><th>Detalhe</th></tr></thead><tbody>
     ${(evs||[]).map(e => `<tr><td>${fmtData(e.data+'T12:00:00')}</td><td>${esc(e.operacao)}</td><td class="num">${fmtNum(e.peso,0)}</td><td>${esc([e.causa_morte, e.procedimentos, e.operacao==='Localização'?B.areaPor[e.area_id]:'', e.observacao].filter(Boolean).join(' · '))}</td></tr>`).join('') || '<tr><td colspan="4" class="vazio">Sem lançamentos</td></tr>'}
     </tbody></table></div>
-    <div class="acoes"><button class="btn sec" id="fch">Fechar</button>${podeEditar() ? '<button class="btn" id="fed">Editar cadastro</button>' : ''}</div></div>`;
+    <div class="acoes"><button class="btn sec" id="fch">Cancelar</button>${podeEditar() ? '<button class="btn" id="fed">Editar cadastro</button>' : ''}</div></div>`;
   document.body.appendChild(m);
   m.querySelector('#fch').onclick = () => m.remove();
   m.onclick = e => { if (e.target === m) m.remove(); };
@@ -1893,7 +1893,7 @@ async function fichaNegocio(n){
     </tbody></table></div>
     ${n.status === 'Desfeita' ? '<div class="msg erro" style="display:block">Esta operação foi desfeita.</div>' : ''}
     ${n.status !== 'Desfeita' && ehAdmin() ? '<div class="acoes"><button class="btn perigo" id="dz">Desfazer esta operação</button></div>' : ''}
-    <div class="acoes"><button class="btn sec" id="x">Fechar</button>${n.status !== 'Desfeita' && n.tipo !== 'Transferência' && !n.lancamento_id && n.valor_liquido > 0 && podeEditar() ? '<button class="btn" id="lf">Lançar no financeiro</button>' : ''}${n.lancamento_id ? '<button class="btn sec" id="vf">Ver lançamento</button>' : ''}</div></div>`;
+    <div class="acoes"><button class="btn sec" id="x">Cancelar</button>${n.status !== 'Desfeita' && n.tipo !== 'Transferência' && !n.lancamento_id && n.valor_liquido > 0 && podeEditar() ? '<button class="btn" id="lf">Lançar no financeiro</button>' : ''}${n.lancamento_id ? '<button class="btn sec" id="vf">Ver lançamento</button>' : ''}</div></div>`;
   document.body.appendChild(m);
   m.querySelector('#x').onclick = () => m.remove();
   if (m.querySelector('#dz')) m.querySelector('#dz').onclick = async () => {
@@ -1951,7 +1951,7 @@ function animalLocal(cod, fid){
 function buscaRapida(){
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="caixa"><h3>Buscar animal</h3><label style="margin-top:0">Brinco ou chip (pode passar o bastão)</label><input id="br_c" autocomplete="off" style="font-size:20px">
-    <div id="br_r" class="rodape"></div><div class="acoes"><button class="btn sec" id="br_x">Fechar</button><button class="btn" id="br_ok">Buscar</button></div></div>`;
+    <div id="br_r" class="rodape"></div><div class="acoes"><button class="btn sec" id="br_x">Cancelar</button><button class="btn" id="br_ok">Buscar</button></div></div>`;
   document.body.appendChild(m);
   const go = async v => {
     v = v || m.querySelector('#br_c').value; if (!v.trim()) return;
@@ -2360,7 +2360,7 @@ function fichaIATF(l){
       <td>${p.feito ? '✔ feito' : podeEditar() ? `<button class="btn ${p.ia || p.dg ? '' : 'sec'} peq" data-p="${i}">${p.ia ? 'Lançar IA' : p.dg ? 'Abrir diagnóstico' : 'Marcar feito'}</button>` : ''}</td></tr>`; }).join('')}
     </tbody></table></div>
     <details style="margin-top:8px"><summary>Fêmeas do lote</summary><div style="font-size:13px">${l.brincos.map(esc).join(', ')}</div></details>
-    <div class="acoes"><button class="btn sec" id="x">Fechar</button>${ehAdmin() ? '<button class="btn perigo" id="del">Excluir lote</button>' : ''}</div></div>`;
+    <div class="acoes"><button class="btn sec" id="x">Cancelar</button>${ehAdmin() ? '<button class="btn perigo" id="del">Excluir lote</button>' : ''}</div></div>`;
   document.body.appendChild(m);
   m.querySelector('#x').onclick = () => m.remove();
   if (m.querySelector('#del')) m.querySelector('#del').onclick = async () => { if (!confirm('Excluir este lote de IATF? Os lançamentos reprodutivos já feitos continuam.')) return; await sb.from('iatf_lotes').delete().eq('id', l.id); m.remove(); telaIATF(); };
@@ -2867,7 +2867,7 @@ function fichaProdutoEst(S, p){
     <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th>Local</th><th class="num">Qtd</th><th class="num">Saldo</th></tr></thead><tbody>
     ${linhas.map(x => `<tr><td>${fD(x.m.data)}</td><td>${esc(x.m.tipo)}</td><td>${esc(S.pL[x.m.local_id]?.nome)}</td><td class="num" style="color:${x.m.quantidade<0?'var(--vermelho)':'var(--verde)'}">${fQ(x.m.quantidade)}</td><td class="num">${fQ(x.s)}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Sem movimentações</td></tr>'}
     </tbody></table></div>
-    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="fch">Cancelar</button></div></div>`;
   document.body.appendChild(m);
   m.querySelector('#fch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { m.remove(); formMovEst(S, {tipo:b.dataset.t, produto_id:p.id}); });
@@ -3030,7 +3030,7 @@ async function fichaReprodutiva(id){
     <div class="secao">Histórico reprodutivo</div>
     <div class="tabela"><table><thead><tr><th>Data</th><th>Operação</th><th>Detalhe</th></tr></thead><tbody>
       ${(evs||[]).map(e => `<tr><td>${fD(e.data)}</td><td>${esc(e.operacao)}</td><td>${esc(det(e))}</td></tr>`).join('') || '<tr><td colspan="3" class="vazio">Sem lançamentos</td></tr>'}</tbody></table></div>
-    <div class="acoes"><button class="btn sec" id="fch">Fechar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="fch">Cancelar</button></div></div>`;
   document.body.appendChild(m);
   m.querySelector('#fch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
   m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formReprodutivo({operacao:b.dataset.op, brincos:a.brinco}); });
@@ -3056,7 +3056,7 @@ async function formReprodutivo(pre){
         <div class="rodape">Com brinco e sexo, a cria já é cadastrada como nascimento, ligada à mãe.</div></div></div>
     <label>Observação</label><input id="r_obs">
     <div class="msg erro" id="r_erro" style="display:none"></div><div id="r_ok"></div>
-    <div class="acoes"><button class="btn sec" id="r_can">Fechar</button><button class="btn" id="r_sal">Lançar</button></div></div>`;
+    <div class="acoes"><button class="btn sec" id="r_can">Cancelar</button><button class="btn" id="r_sal">Lançar</button></div></div>`;
   document.body.appendChild(m);
   const g = id => m.querySelector('#'+id);
   const atualizar = () => {
@@ -3311,7 +3311,7 @@ async function fichaNota(id){
     <div class="msg erro" id="nerro" style="display:none"></div>
     ${podeEditar() && n.status !== 'Lançada' ? '<div class="acoes"><button class="btn" id="nlanc">Lançar em contas a pagar</button></div>' : ''}
     ${podeEditar() && itens.length ? `<div class="acoes">${d.estoque ? '<span class="rodape">✔ Já deu entrada no estoque (' + d.estoque.itens + ' itens)</span>' : ''}<button class="btn sec" id="nest">Dar entrada no estoque de insumos</button></div>` : ''}
-    <div class="acoes">${podeEditar() ? `<button class="btn sec" id="nign">${n.status==='Ignorada'?'Voltar para nova':'Ignorar nota'}</button>` : ''}<button class="btn sec" id="nfch">Fechar</button></div></div>`;
+    <div class="acoes">${podeEditar() ? `<button class="btn sec" id="nign">${n.status==='Ignorada'?'Voltar para nova':'Ignorar nota'}</button>` : ''}<button class="btn sec" id="nfch">Cancelar</button></div></div>`;
   document.body.appendChild(m);
   m.querySelector('#nfch').onclick = () => m.remove(); m.onclick = e => { if (e.target === m) m.remove(); };
   const ign = m.querySelector('#nign');
