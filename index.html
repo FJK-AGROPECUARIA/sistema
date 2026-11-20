@@ -41,6 +41,8 @@ header .esp{flex:1}
 header select{background:var(--verde);color:#fff;border:0;border-radius:8px;padding:7px 8px;font-size:14px;max-width:170px}
 .btn{border:0;border-radius:9px;padding:10px 14px;font-size:15px;font-weight:600;cursor:pointer;background:var(--verde2);color:#fff}
 .btn.sec{background:#fff;color:var(--verde);border:1px solid var(--borda)}
+.btn.b-fechar{background:var(--vermelho,#d32f2f)!important;color:#fff!important;border-color:transparent!important}
+.btn.b-salvar{background:#2e7d32!important;color:#fff!important;border-color:transparent!important}
 .btn.perigo{background:var(--vermelho)}
 .btn.peq{padding:6px 10px;font-size:13px}
 .btn:disabled{opacity:.5}
@@ -558,6 +560,9 @@ new MutationObserver(ms => { for (const mu of ms) for (const n of mu.addedNodes)
   if (n.classList.contains('modal')) gradeAuto(n.querySelector(':scope > .caixa'));
   else if (n.classList.contains('caixa') && n.parentElement?.classList.contains('modal')) gradeAuto(n);
   if (n.classList.contains('cb') || n.classList.contains('cb-lista')) continue;
+  // botões padrão: Fechar/Cancelar vermelho, Salvar verde
+  (n.tagName === 'BUTTON' ? [n] : n.querySelectorAll('button.btn')).forEach(b => { const t = b.textContent.trim();
+    if (/^(Fechar|Cancelar)$/i.test(t)) b.classList.add('b-fechar'); else if (/^Salvar/i.test(t)) b.classList.add('b-salvar'); });
   (n.tagName === 'SELECT' ? [n] : n.querySelectorAll('select')).forEach(comboBusca); } }).observe(document.body, {childList:true, subtree:true});
 // largura do campo numa grade de 6 colunas (o.w); padrão pelo tipo
 const larguraCampo = o => o.w || (o.tipo === 'bool' ? 6 : o.tipo === 'color' ? 1 : (o.tipo === 'number' || o.tipo === 'date') ? 2 : 3);
@@ -871,7 +876,7 @@ async function telaMapa(){
   const modDe = {}, corMod = {}; (ma||[]).forEach(x => { const mm = (mods||[]).find(m => m.id === x.modulo_id); if (mm) { modDe[x.area_id] = mm.nome; if (mm.cor) corMod[x.area_id] = mm.cor; } });
   const porArea = {}; lotes.forEach(l => (porArea[l.area_id] = porArea[l.area_id] || []).push(l));
   const totCab = lotes.reduce((s,l) => s + l.quantidade, 0);
-  $('#mbusca').insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha</div>`);
+  $('#mbusca').parentElement.insertAdjacentHTML('afterend', `<div class="rodape" style="flex-basis:100%">Total: <b>${fmtNum(totCab,0)} cabeças</b> · ${fmtNum((areas||[]).reduce((s,a)=>s+Number(a.hectares||0),0))} ha</div>`);
   const mapa = L.map('mapa', {zoomControl:true});
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:20, maxNativeZoom:17, attribution:'Esri'}).addTo(mapa);
   const grupo = L.featureGroup().addTo(mapa); const camadas = {};
@@ -957,7 +962,8 @@ function fichaArea(a, ls, modulo){
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="caixa"><h3>${esc(a.codigo)}${a.nome!==a.codigo?' – '+esc(a.nome):''}</h3>
     <div class="rodape" style="margin-top:0">${fmtNum(a.hectares)} ha · ${esc(a.tipo_uso)}${a.cultura?' · '+esc(a.cultura):''}${modulo?' · Módulo '+esc(modulo):''}</div>
-    <div class="grade" style="grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0">
+    <div class="grade" style="grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0">
+      <div class="quad" id="fa_dias" style="min-height:70px;padding:8px;cursor:default;${cab ? '' : 'background:#eef4e6'}"><b>…</b><span>${cab ? 'dias com gado' : 'dias em descanso'}</span></div>
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${fmtNum(cab,0)}</b><span>cabeças</span></div>
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${cab?fmtNum(kg/cab,0):'–'}</b><span>kg médio</span></div>
       <div class="quad" style="min-height:70px;padding:8px;cursor:default"><b>${a.hectares>0?fmtNum(ua/a.hectares,1):'–'}</b><span>UA/ha</span></div></div>
@@ -972,6 +978,12 @@ function fichaArea(a, ls, modulo){
   m.querySelector('#fch').onclick = () => m.remove();
   m.onclick = e => { if (e.target === m) m.remove(); };
   m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formOperacao({operacao:b.dataset.op, area_id:a.id}); });
+  // dias com gado (desde a entrada mais antiga) ou dias em descanso (desde a última saída)
+  const dq = m.querySelector('#fa_dias'), mostra = (dt, txt) => { if (!dt) { dq.querySelector('b').textContent = '–'; return; }
+    const d = diasDesde(String(dt).slice(0,10)); dq.querySelector('b').textContent = fmtNum(d,0); dq.querySelector('span').textContent = `${txt} desde ${fmtData(String(dt).slice(0,10)+'T12:00:00')}`; };
+  if (cab) mostra(ls.map(l => l.data_entrada).filter(Boolean).sort()[0], 'dias com gado ·');
+  else sb.from('operacoes_rebanho').select('data').eq('fazenda_id', a.fazenda_id || E.fazenda.id).or(`area_id.eq.${a.id},area_destino_id.eq.${a.id}`).order('data', {ascending:false}).limit(1)
+    .then(({data}) => mostra(data?.[0]?.data, 'em descanso ·'));
 }
 
 async function formOperacao(pre){
@@ -988,6 +1000,7 @@ async function formOperacao(pre){
     <label>Data *</label><input id="o_data" type="date" value="${hojeISO()}" max="${hojeISO()}">
     <label id="l_area">Área *</label><select id="o_area">${optA(pre.area_id)}</select>
     <div id="b_dest"><label>Área de destino *</label><select id="o_area2">${optA(pre.area_destino_id)}</select></div>
+    <div class="rodape" id="o_ainfo" style="margin:4px 0 0"></div>
     <div id="b_cat2"><label>Nova categoria *</label><select id="o_cat2"><option value="">— escolha —</option>${(cats||[]).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
     <div id="b_causa"><label>Causa da morte</label><select id="o_causa">${CAUSAS.map(c => `<option>${c}</option>`).join('')}</select></div>
     <div class="secao" style="margin:12px 0 4px">Categorias <span class="rodape" id="o_cdica" style="font-weight:400"></span></div>
@@ -1040,7 +1053,18 @@ async function formOperacao(pre){
       g('o_neg').onclick = e => { e.preventDefault(); m.remove(); E.tela = 'neg_' + neg; telaNegocio(neg); }; }
     montar();
   };
-  g('o_op').onchange = atualizar; g('o_area').onchange = atualizar;
+  // situação das áreas: dias com gado (desde a entrada) ou em descanso (desde a última saída)
+  const situacao = async id => { if (!id) return '';
+    const nome = (areas||[]).find(x => x.id === id)?.codigo || '';
+    const ent = lotes.filter(l => l.area_id === id && l.quantidade > 0).map(l => String(l.data_entrada||'').slice(0,10)).filter(Boolean).sort()[0];
+    if (ent) return `${esc(nome)}: com gado há <b>${diasDesde(ent)} dias</b> (entrada ${fmtData(ent+'T12:00:00')})`;
+    const {data} = await sb.from('operacoes_rebanho').select('data').eq('fazenda_id', fid).or(`area_id.eq.${id},area_destino_id.eq.${id}`).order('data', {ascending:false}).limit(1);
+    const d = data?.[0]?.data; return d ? `${esc(nome)}: em descanso há <b>${diasDesde(d)} dias</b> (desde ${fmtData(d+'T12:00:00')})` : `${esc(nome)}: sem gado`; };
+  const infoAreas = async () => { const cfg = OPS[g('o_op').value] || {};
+    const t = [await situacao(g('o_area').value), cfg.destino === 'area' ? await situacao(g('o_area2').value) : ''].filter(Boolean);
+    g('o_ainfo').innerHTML = t.join(' &nbsp;→&nbsp; '); };
+  g('o_area2').addEventListener('change', infoAreas);
+  g('o_op').onchange = () => { atualizar(); infoAreas(); }; g('o_area').onchange = () => { atualizar(); infoAreas(); }; infoAreas();
   g('o_todas').onchange = e => { m.querySelectorAll('#o_cats .c_ck').forEach(c => c.checked = e.target.checked); total(); };
   atualizar();
   g('o_can').onclick = () => { m.remove(); if (mudou && ['mapa','estoque','historico','inicio'].includes(E.tela)) render(); };
@@ -1082,7 +1106,7 @@ async function formOperacao(pre){
     const txt = `✔ Operação concluída: ${op} (${feitas.join(', ')})` + (brincos.length ? ` · ${brincos.length - falhas.length} brinco(s) baixado(s)` : '');
     g('o_okmsg').textContent = txt; g('o_okmsg').style.display = 'block'; aviso('Operação concluída');
     if (falhas.length) alertaLista('Brincos não baixados', falhas);
-    lotes = await carregarLotes(); g('o_obs').value = ''; montar();
+    lotes = await carregarLotes(); g('o_obs').value = ''; montar(); infoAreas();
   };
 }
 
