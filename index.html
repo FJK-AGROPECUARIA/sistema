@@ -1005,8 +1005,8 @@ function fichaArea(a, ls, modulo, lote){
   m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { m.remove(); formOperacao({operacao:b.dataset.op, area_id:a.id, cats: lote ? ls.map(l => l.categoria_id) : null}); });
   if (m.querySelector('#fl_sal')) m.querySelector('#fl_sal').onclick = async () => {
     const nome = m.querySelector('#fl_nome').value.trim() || null, obs = m.querySelector('#fl_obs').value.trim() || null;
-    const r = await sb.from('lotes').update({nome_lote:nome, obs_lote:obs}).in('id', ls.map(l => l.id)).select('id');
-    if (r.error || !r.data?.length) return aviso('Não foi possível salvar: ' + (r.error?.message || 'sem permissão'));
+    const r = await sb.rpc('salvar_lote', {p_ids:ls.map(l => l.id), p_nome:nome || '', p_obs:obs || '', p_so_sem_nome:false});
+    if (r.error) return aviso('Não foi possível salvar: ' + r.error.message.replace(/^.*?: /,''));
     ls.forEach(l => { l.nome_lote = nome; l.lote = nome || ''; l.obs_lote = obs; });
     m.querySelector('#fl_tit').textContent = nome || 'Lote sem nome'; aviso('Lote salvo'); };
   // dias com gado (desde a entrada mais antiga) ou dias em descanso (desde a última saída)
@@ -1182,7 +1182,8 @@ async function formOperacao(pre){
       const orig = lotes.find(l => l.area_id === area_id && l.categoria_id === x.id);
       const dArea = cfg.destino === 'area' ? g('o_area2').value : area_id, dCat = cfg.destino === 'cat' ? g('o_cat2').value : x.id;
       if (orig?.nome_lote && (cfg.destino === 'area' || cfg.destino === 'cat'))
-        await sb.from('lotes').update({nome_lote:orig.nome_lote, obs_lote:orig.obs_lote}).eq('area_id', dArea).eq('categoria_id', dCat).is('nome_lote', null);
+        { const {data:dl} = await sb.from('lotes').select('id').eq('area_id', dArea).eq('categoria_id', dCat).maybeSingle();
+          if (dl) await sb.rpc('salvar_lote', {p_ids:[dl.id], p_nome:orig.nome_lote, p_obs:orig.obs_lote || '', p_so_sem_nome:true}); }
     }
     const falhas = [];
     for (const b of brincos) { const r = await sb.rpc('lancar_individual', {p:{animal_id:b.an.id, operacao:'Morte', data, peso:'', causa_morte:g('o_causa').value, observacao:g('o_obs').value.trim()}});
