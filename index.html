@@ -25,8 +25,8 @@ header .hFaz{display:flex;flex-direction:column;align-items:flex-start}
 header .hFaz small{font-size:10px;color:var(--cinza);margin:0 0 2px 2px;line-height:1}
 header .hDir{display:flex;align-items:center;gap:6px;justify-content:flex-end}
 header #btGestao,header #btSair{font:inherit;font-size:13px;border-radius:8px;padding:7px 10px;cursor:pointer;white-space:nowrap}
-header #btGestao{background:#fff;color:var(--verde);border:1.5px solid var(--verde);font-weight:600}
-header #btGestao.on{background:var(--verde);color:#fff}
+header #btGestao{background:#1565c0;color:#fff;border:1.5px solid #1565c0;font-weight:600}
+header #btGestao.on{background:#0d47a1;border-color:#0d47a1;color:#fff}
 header select.off{background:#fff;color:var(--verde);border:1.5px solid var(--verde)}
 header #btSair{background:none;border:1px solid var(--borda);color:var(--cinza)}
 .logo-fjk{height:clamp(56px,15vw,84px);width:auto;flex:none}
@@ -196,7 +196,7 @@ function cabecalho(){
       <div class="topoTxt"><h1>SISTEMA DE GESTÃO</h1><small>${esc(E.perfil?.nome || '')}</small></div></div>
     <div class="hMeio">
       <div class="hFaz"><small>Selecione a fazenda</small><select id="selFaz" class="${naGestao ? 'off' : ''}">${naGestao ? '<option value="">Escolher fazenda</option>' : ''}${fazs.map(f => `<option value="${f.id}" ${f.id===E.fazenda?.id?'selected':''}>${esc(f.nome)}</option>`).join('')}</select></div>
-      ${gestao ? `<button id="btGestao" class="${naGestao ? 'on' : ''}" title="Financeiro, contábil e todas as fazendas">🏛️ Gestão do Grupo</button>` : ''}</div>
+      ${gestao ? `<button id="btGestao" class="${naGestao ? 'on' : ''}" title="Financeiro, contábil e todas as fazendas">🏛️ Gestão do grupo</button>` : ''}</div>
     <div class="hDir"><span id="filaInd" class="pill" style="display:none;background:#fff4d6;color:#8a5a00" title="Lançamentos guardados sem internet; enviam sozinhos quando o sinal voltar">⏳</span>
       <button id="btSair" title="Sair (${esc(E.usuario?.email || '')})">⎋ Sair</button></div>
   </header>`;
