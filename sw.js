@@ -40,7 +40,9 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return; // gravações vão direto (sem sinal, o app guarda na fila dele)
   // página do app
   if (req.mode === 'navigate' || (u.origin === location.origin && /\/(index\.html)?$/.test(u.pathname))) {
-    e.respondWith(redePrimeiro(req, VERSAO_SW + '-app', 6000).catch(() => caches.match('./index.html', {ignoreSearch:true})));
+    // pede sempre a versão mais nova da página (sem cópia velha do navegador), para o app já abrir atualizado e não precisar recarregar depois
+    const nova = new Request(req.url, {cache:'no-cache', credentials:'same-origin'});
+    e.respondWith(redePrimeiro(nova, VERSAO_SW + '-app', 6000).catch(() => caches.match('./index.html', {ignoreSearch:true})));
     return;
   }
   // arquivos do próprio app
