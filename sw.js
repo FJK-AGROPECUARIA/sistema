@@ -1,8 +1,9 @@
 // FJK Sistema – funciona sem internet
 // - o próprio app (página, ícones, bibliotecas) fica guardado no aparelho
 // - toda consulta de dados (GET no banco) guarda a última resposta; sem sinal, usa a guardada
-const VERSAO_SW = 'fjk-sw-1';
-const APP = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png',
+const VERSAO_SW = 'fjk-sw-2';
+const DADOS = 'fjk-sw-1-dados'; // cache dos dados do banco: mantido entre versões
+const APP = ['./', './index.html', './manifest.json', './fjk-192.png', './fjk-512.png', './apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'];
 
@@ -10,7 +11,7 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSAO_SW + '-app').then(c => Promise.all(APP.map(u => c.add(new Request(u, {cache:'reload'})).catch(() => {})))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => !k.startsWith(VERSAO_SW)).map(k => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => !k.startsWith(VERSAO_SW) && k !== DADOS).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 // rede primeiro; se falhar (sem sinal), devolve a última cópia guardada
@@ -46,7 +47,7 @@ self.addEventListener('fetch', e => {
   if (u.origin === location.origin) { e.respondWith(redePrimeiro(req, VERSAO_SW + '-app', 6000)); return; }
   // banco de dados (consultas e usuário)
   if (/supabase\.co$/.test(u.hostname) && (u.pathname.startsWith('/rest/v1/') || u.pathname === '/auth/v1/user')) {
-    e.respondWith(redePrimeiro(req, VERSAO_SW + '-dados', 15000)); return;
+    e.respondWith(redePrimeiro(req, DADOS, 15000)); return;
   }
   // bibliotecas (supabase, leaflet)
   if (/unpkg\.com|jsdelivr\.net/.test(u.hostname)) { e.respondWith(guardadoPrimeiro(req, VERSAO_SW + '-app')); return; }
