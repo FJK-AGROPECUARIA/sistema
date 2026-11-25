@@ -1,24 +1,30 @@
 {
-  "name": "FJK Agropecuária",
-  "short_name": "FJK",
+  "name": "FJK Agro",
+  "short_name": "FJK Agro",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f3f5f0",
+  "background_color": "#2f542b",
   "theme_color": "#2f5d1e",
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "fjk-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "fjk-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "fjk-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
