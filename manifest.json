@@ -3,7 +3,7 @@
   "short_name": "FJK Agro",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#2f542b",
   "theme_color": "#2f5d1e",
   "lang": "pt-BR",
@@ -26,5 +26,9 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "display_override": [
+    "fullscreen",
+    "standalone"
   ]
 }
